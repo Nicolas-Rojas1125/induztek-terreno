@@ -11,11 +11,11 @@ Aplicación móvil Android (Kotlin + Jetpack Compose + Material 3 + MVVM + SQLit
 
 | Integrante | Rol en el equipo | GitHub |
 |---|---|---|
-| Nicolás Rojas | Desarrollo · Integrante A | Nicolas-Rojas1125 |
-| Vicente Arancibia | Desarrollo · Integrante B |viarancibiam-cmd |
+| Nicolás Rojas | Desarrollo · Integrante A | [@Nicolas-Rojas1125](https://github.com/Nicolas-Rojas1125) |
+| Vicente Arancibia | Desarrollo · Integrante B | [@viarancibiam-cmd](https://github.com/viarancibiam-cmd) |
 
 **Docente:** Víctor Rosendo · **Grupo N°:** 17 · **Sección:** *011D - 001D*
-**Planificación (Trello):** *[pegar enlace público del tablero]*
+**Planificación (Trello):** https://trello.com/b/UaDm92a3/grupo-17-induztek-terreno
 
 ---
 

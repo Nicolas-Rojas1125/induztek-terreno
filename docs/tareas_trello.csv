@@ -1,0 +1,32 @@
+Lista,Tarjeta,Descripcion,Responsable,Semana,Etiquetas,Requerimientos
+Hecho,Análisis del caso y anexos,"Leer caso, anexos 1-12 y aclaraciones 1-9; listar RF/RN/HU que cubre el encargo",Ambos,6,Análisis,RF-01..RF-22
+Hecho,Modelo de datos (MER 3FN),"Definir 18 tablas, claves, UNIQUE, CHECK y triggers",Nicolás Rojas,6,Datos,RN-01 RN-02 RN-04 RN-18
+Hecho,Repositorio GitHub y tablero Trello,"Crear repo público, invitar al docente, ramas main/develop, issues y etiquetas",Vicente Arancibia,6,Gestión,-
+Hecho,Tema Material 3 y componentes base,"Colores, tipografía, medidas, botones 56 dp, tarjetas, chips",Vicente Arancibia,6,UI,RNF-04 RNF-09
+Hecho,Catálogos de dominio,"TipoEquipo, TipoPrueba, Parametro, estados, resultados, roles y permisos",Nicolás Rojas,7,Dominio,RN-05 Anexo 7
+Hecho,Reglas de resultado,"EvaluadorPruebas: IP, error TTR, contactos, relé, resultado global",Nicolás Rojas,7,Dominio,RN-06 RN-07 RN-08 RN-08b RN-10
+Hecho,Máquina de estados del protocolo,"Transiciones por rol, motivo obligatorio, RN-17",Nicolás Rojas,7,Dominio,RN-04 RN-17 HU-10
+Hecho,Validadores centralizados,"RUT, correo, teléfono, OT, TAG, rangos de medición, fechas",Nicolás Rojas,7,Dominio,RN-03 HU-03 RNF-05
+Hecho,Pruebas unitarias del dominio,"46 pruebas JUnit con datos del Anexo 9 y FT-03",Nicolás Rojas,7,Calidad,-
+Hecho,SQLiteOpenHelper y datos semilla,"Esquema, triggers, índices y datos del Anexo 9",Vicente Arancibia,7,Datos,RF-09 RNF-03
+Hecho,Repositorios,"Clientes, equipos, usuarios, instrumentos, visitas, protocolos; filtro RN-18 en SQL",Vicente Arancibia,8,Datos,RN-18 RN-19
+Hecho,Login y sesión,"Hash con sal, SharedPreferences, usuario desactivado",Nicolás Rojas,8,Seguridad,RF-14 RF-22
+Hecho,Navegación y barra inferior por rol,"NavHost, rutas con id, transiciones animadas",Vicente Arancibia,8,UI,IE 2.1.1
+Hecho,Clientes e instalaciones,"Lista, formulario cliente, formulario instalación, detalle",Vicente Arancibia,8,UI,RF-01
+Hecho,Equipos,"Búsqueda, registro con TAG único, detalle e historial",Vicente Arancibia,8,UI,RF-02 RF-10 RF-20 HU-01
+Hecho,Visitas,"Formulario OT, detalle, resumen, cierre con validación",Vicente Arancibia,9,UI,RF-18 RN-13 HU-07
+Hecho,Protocolo y estados,"Cabecera, condiciones ambientales, acciones por rol, trazabilidad, reemplazo",Nicolás Rojas,9,UI,RF-12 RF-13 RNF-07
+Hecho,Formulario de medición,"Valores por parámetro, MΩ/GΩ, instrumento vigente, resultado en vivo, guardar y siguiente",Nicolás Rojas,9,UI,RF-04 RF-05 RF-06 HU-04 HU-05
+Hecho,Comparación histórica,"Variación vs prueba anterior, alerta > 25 %, gráfico de evolución",Nicolás Rojas,9,UI,RF-11 RN-09 HU-06
+Hecho,Recurso nativo: cámara,"Permiso en tiempo de ejecución, FileProvider, foto de placa",Vicente Arancibia,10,Nativo,PB-03
+Hecho,Recurso nativo: GPS,"Coordenadas de instalación y de cierre de visita",Vicente Arancibia,10,Nativo,RF-07
+Hecho,Vibración y estado de red,"Retroalimentación háptica y aviso sin conexión",Nicolás Rojas,10,Nativo,RNF-02 RNF-04
+Hecho,Acta PDF y recepción,"PdfDocument, compartir, constancia de recepción con RUT",Nicolás Rojas,10,Nativo,RF-07 RF-08 RN-14
+Hecho,Animaciones,"Sacudida, crossfade, escalonado, contadores, gráfico, pulso",Ambos,10,UI,IE 2.2.2
+Hecho,Administración del Jefe técnico,"Instrumentos, calibraciones, personal y cuentas cliente",Vicente Arancibia,10,UI,RN-12 RF-19 RF-22 RN-20
+Hecho,Vista del usuario cliente,"Filtros RN-18/RN-19, actas y protocolos de su empresa",Nicolás Rojas,10,UI,RF-15 RF-16
+En revisión,Pruebas en emulador y dispositivo,"Recorrer guion de demostración con los 4 perfiles, modo avión y GPS",Ambos,11,Calidad,-
+En revisión,README y documentación,"Descripción, integrantes, funcionalidades, pasos para ejecutar",Ambos,11,Documentación,-
+Por hacer,Entrega AVA grupal e individual,"Subir el mismo código del repo a AVA y activar enlace individual",Ambos,11,Gestión,-
+Backlog EFT,Backend Spring Boot + API REST,"Microservicios y pruebas unitarias del backend",Ambos,EFT,Backend,Caso 5.1
+Backlog EFT,Sincronización con Retrofit,"Enviar protocolos no sincronizados al volver la conexión",Ambos,EFT,Backend,RNF-02 HU-09

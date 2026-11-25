@@ -1,0 +1,22 @@
+Lista,Tarjeta,Descripcion,Responsable,Semana,Etiquetas
+Hecho,Análisis de la pauta EP4,"Revisar IE 3.1.1 a 3.3.2, ejemplos del docente (Docker y pruebas) y lista de mejoras del equipo",Ambos,13,Análisis
+Hecho,Eureka Server y API Gateway,"Proyecto eurekaserver (8761) y apigateway (8081) con rutas lb:// a los tres microservicios",Vicente Arancibia,13,Backend
+Hecho,docker-compose + MySQL,"MySQL 8.4 con healthcheck, init-db.sql con 3 bases, red induztek-net, Dockerfile multi-etapa por servicio",Vicente Arancibia,13,Backend
+Hecho,ms-usuarios,"Login PBKDF2, CRUD de cuentas, reglas por rol (Admin/Ingeniero/Técnico/Cliente), recuperar y cambiar contraseña, administrador inicial",Vicente Arancibia,13,Backend
+Hecho,ms-activos,"CRUD de clientes, instalaciones, equipos (ficha técnica) e instrumentos con calibraciones; filtros, paginación y 409 si hay dependencias",Nicolás Rojas,13,Backend
+Hecho,ms-protocolos,"Visitas y protocolos por UUID (upsert idempotente), inmutabilidad del Formalizado (409), resumen por estado y cambios desde",Nicolás Rojas,13,Backend
+Hecho,Pruebas unitarias backend,"47 pruebas JUnit 5 + Mockito sobre los servicios de los tres microservicios",Ambos,14,Pruebas
+Hecho,Capa remota Retrofit,"Apis, DTO, mapeos, LlamadaSegura (manejo de 4xx/5xx y sin red), URL del servidor configurable",Vicente Arancibia,14,App
+Hecho,Sincronización offline,"Triggers de pendientes en SQLite, envío de visitas/protocolos y descarga de cambios; automática al reconectar, al iniciar sesión y cada 5 min",Vicente Arancibia,14,App
+Hecho,Quitar datos de ejemplo,"DatosSemilla solo con catálogos; la app parte vacía y el servidor crea el administrador",Nicolás Rojas,14,App
+Hecho,Cuentas según rol,"Pantallas de cuentas: lista con filtros, crear/editar, activar/desactivar y eliminar; roles permitidos según quién crea",Vicente Arancibia,14,App
+Hecho,Recuperar clave · Perfil · Cambiar clave,"Flujo de recuperación con código, edición de perfil y cambio de contraseña",Vicente Arancibia,14,App
+Hecho,Listas con filtros y paginación,"BarraBusqueda, FiltrosChips y ControlPaginacion en cuentas, clientes, equipos, visitas, protocolos e instrumentos",Nicolás Rojas,14,UI
+Hecho,Ficha técnica de equipos,"Campos por tipo de equipo con validación, opciones, rangos y % de avance; editar y eliminar equipos",Nicolás Rojas,14,App
+Hecho,API externa Open-Meteo,"ClimaRemoto + TarjetaClima en instalación y protocolo; usar temperatura y humedad en las condiciones de la prueba",Nicolás Rojas,14,App
+Hecho,Colores homogéneos,"Roles Material 3 (surfaceContainer, errorContainer, primary) en claro y oscuro; sin colores fijos en pantallas",Nicolás Rojas,14,UI
+Hecho,Pruebas unitarias app,"114 pruebas: ViewModels con fakes y coroutines-test, remotos con APIs falsas, dominio",Ambos,15,Pruebas
+Hecho,APK firmado,"Keystore induztek-release.jks, keystore.properties y signingConfigs.release; capturas en README",Nicolás Rojas,15,Entrega
+Hecho,Documentación,"README con endpoints, pasos Docker/app/APK, colección Postman y guía de defensa",Ambos,15,Docs
+Por hacer,Capturas APK y .jks,"Generar el APK firmado en Android Studio y guardar docs/capturas/apk_firmado.png y keystore_jks.png",Ambos,15,Entrega
+Por hacer,Entrega AVA,"Subir el zip del repositorio en AVA grupal y activar AVA individual cada integrante",Ambos,15,Entrega

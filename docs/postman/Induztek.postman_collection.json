@@ -1,0 +1,495 @@
+{
+  "info": {
+    "name": "Induztek Terreno · EP4",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gateway",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "actor",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "ms-usuarios",
+      "item": [
+        {
+          "name": "Login admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/login"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"admin@induztek.cl\",\n  \"contrasena\": \"Induztek2026\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios?pagina=0&tamano=10"
+            }
+          }
+        },
+        {
+          "name": "Crear ingeniero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rut\": \"15.123.456-2\",\n  \"nombre\": \"Andrea Contreras\",\n  \"correo\": \"acontreras@induztek.cl\",\n  \"telefono\": \"+56911112222\",\n  \"cargo\": \"Ingeniera de pruebas\",\n  \"rol\": \"INGENIERO\",\n  \"idCliente\": null,\n  \"nombreCliente\": null,\n  \"contrasena\": \"Induztek2026\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Obtener usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/2"
+            }
+          }
+        },
+        {
+          "name": "Editar perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/2"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Andrea Contreras\",\n  \"correo\": \"acontreras@induztek.cl\",\n  \"telefono\": \"+56933334444\",\n  \"cargo\": \"Ingeniera senior\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Desactivar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/2/estado"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Cambiar contraseña",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/1/contrasena"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actual\": \"Induztek2026\",\n  \"nueva\": \"Induztek2027\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Recuperar contraseña",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/recuperar"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"admin@induztek.cl\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Restablecer contraseña",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/restablecer"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"admin@induztek.cl\",\n  \"codigo\": \"123456\",\n  \"nueva\": \"Induztek2026\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Roles creables por el actor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/roles/creables"
+            }
+          }
+        },
+        {
+          "name": "Eliminar usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/usuarios/2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ms-activos",
+      "item": [
+        {
+          "name": "Crear cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/clientes"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rut\": \"76.482.915-8\",\n  \"razonSocial\": \"Minera Andes SpA\",\n  \"giro\": \"Minería\",\n  \"contactoNombre\": \"Ana Pérez\",\n  \"telefono\": \"+56911112222\",\n  \"correo\": \"ana@andes.cl\",\n  \"direccion\": \"Av. Apoquindo 4500, Las Condes\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Listar clientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/clientes?buscar=andes&pagina=0&tamano=10"
+            }
+          }
+        },
+        {
+          "name": "Editar cliente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/clientes/1"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rut\": \"76.482.915-8\",\n  \"razonSocial\": \"Minera Andes SpA\",\n  \"giro\": \"Minería del cobre\",\n  \"contactoNombre\": \"Ana Pérez\",\n  \"telefono\": \"+56911112222\",\n  \"correo\": \"ana@andes.cl\",\n  \"direccion\": \"Av. Apoquindo 4500\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Crear instalación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/instalaciones"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idCliente\": 1,\n  \"nombre\": \"Subestación Lampa\",\n  \"ubicacion\": \"Camino Lo Echevers km 3\",\n  \"idComuna\": 1,\n  \"nombreComuna\": \"Lampa\",\n  \"nombreRegion\": \"Metropolitana\",\n  \"observacionesAcceso\": \"Inducción de 30 minutos\",\n  \"latitud\": -33.2833,\n  \"longitud\": -70.8833\n}"
+            }
+          }
+        },
+        {
+          "name": "Crear transformador con ficha técnica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/equipos"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idInstalacion\": 1,\n  \"tag\": \"TR-01\",\n  \"tipo\": \"TRANSFORMADOR\",\n  \"marca\": \"Rhona\",\n  \"modelo\": \"TP-1000\",\n  \"numeroSerie\": \"RH-2019-0045\",\n  \"anioFabricacion\": 2019,\n  \"potenciaKva\": 1000,\n  \"tensionPrimariaKv\": 12,\n  \"tensionSecundariaKv\": 0.4,\n  \"corrienteNominalA\": null,\n  \"maxContactosUohm\": null,\n  \"observaciones\": \"\",\n  \"datosTecnicos\": {\n    \"grupoConexion\": \"Dyn11\",\n    \"frecuenciaHz\": \"50\",\n    \"impedanciaPct\": \"5.5\",\n    \"refrigeracion\": \"ONAN\",\n    \"medioAislante\": \"Aceite mineral\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Filtrar equipos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/equipos?tipo=TRANSFORMADOR&idCliente=1"
+            }
+          }
+        },
+        {
+          "name": "Crear instrumento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario-Id",
+                "value": "{{actor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/instrumentos"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Megóhmetro 5 kV\",\n  \"categoria\": \"MEGOHMETRO\",\n  \"marca\": \"Megger\",\n  \"modelo\": \"MIT525\",\n  \"numeroSerie\": \"MG-5521\",\n  \"fechaCalibracion\": \"2026-06-01\",\n  \"fechaVencimiento\": \"2027-06-01\",\n  \"registradaPor\": \"Administrador\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Registrar calibración",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/instrumentos/1/calibraciones"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fechaCalibracion\": \"2026-11-01\",\n  \"fechaVencimiento\": \"2027-11-01\",\n  \"idUsuarioRegistra\": 1,\n  \"registradaPor\": \"Administrador\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Instrumentos vencidos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/instrumentos?vigencia=VENCIDO"
+            }
+          }
+        },
+        {
+          "name": "Sync datos maestros",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/sync/activos"
+            }
+          }
+        },
+        {
+          "name": "Eliminar cliente (409 si tiene instalaciones)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/clientes/1"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ms-protocolos",
+      "item": [
+        {
+          "name": "Guardar visita (upsert)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/visitas/2f1c4b3e-0d7a-4c55-9a51-7b0e6c0f1a11"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"2f1c4b3e-0d7a-4c55-9a51-7b0e6c0f1a11\",\n  \"numeroOt\": \"OT-2026-1240\",\n  \"idInstalacion\": 1,\n  \"idCliente\": 1,\n  \"fecha\": \"2026-11-24\",\n  \"tipoVisita\": \"SOLO_PRUEBAS\",\n  \"idIngenieroCargo\": 2,\n  \"fechaHoraCierre\": null,\n  \"latitudCierre\": null,\n  \"longitudCierre\": null,\n  \"idUsuarioCierra\": null,\n  \"participantes\": [\n    3\n  ],\n  \"recepcion\": null,\n  \"origen\": \"app\",\n  \"actualizadoEn\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Guardar protocolo (upsert)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/protocolos/9a8b7c6d-1111-2222-3333-444455556666"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"9a8b7c6d-1111-2222-3333-444455556666\",\n  \"numero\": \"PT-2026-0001-A1B2\",\n  \"visitaUuid\": \"2f1c4b3e-0d7a-4c55-9a51-7b0e6c0f1a11\",\n  \"idEquipo\": 1,\n  \"idInstalacion\": 1,\n  \"idCliente\": 1,\n  \"idUsuarioRegistra\": 3,\n  \"fechaHoraPrueba\": 1795000000000,\n  \"temperaturaC\": 18.4,\n  \"humedadPct\": 62,\n  \"descripcionMantenimiento\": \"\",\n  \"observaciones\": \"\",\n  \"comentarioVariacion\": \"\",\n  \"estado\": \"BORRADOR\",\n  \"resultadoGlobal\": null,\n  \"reemplazaUuid\": null,\n  \"pruebas\": [],\n  \"historial\": [],\n  \"actualizadoEn\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Listar protocolos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/protocolos?estado=BORRADOR&pagina=0&tamano=10"
+            }
+          }
+        },
+        {
+          "name": "Resumen por estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/protocolos/resumen"
+            }
+          }
+        },
+        {
+          "name": "Cambios desde",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/sync/protocolos?desde=0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "API externa Open-Meteo",
+      "item": [
+        {
+          "name": "Clima actual Lampa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://api.open-meteo.com/v1/forecast?latitude=-33.2833&longitude=-70.8833&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

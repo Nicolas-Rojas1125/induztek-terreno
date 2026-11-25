@@ -1,0 +1,123 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: induztek-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: db_usuarios
+      TZ: America/Santiago
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - induztek-net
+
+  eureka-server:
+    build:
+      context: ./eurekaserver
+    container_name: induztek-eureka
+    ports:
+      - "8761:8761"
+    restart: on-failure
+    networks:
+      - induztek-net
+
+  ms-usuarios:
+    build:
+      context: ./ms-usuarios
+    container_name: induztek-ms-usuarios
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - induztek-net
+
+  ms-activos:
+    build:
+      context: ./ms-activos
+    container_name: induztek-ms-activos
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - induztek-net
+
+  ms-protocolos:
+    build:
+      context: ./ms-protocolos
+    container_name: induztek-ms-protocolos
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    ports:
+      - "8084:8084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - induztek-net
+
+  api-gateway:
+    build:
+      context: ./apigateway
+    container_name: induztek-api-gateway
+    environment:
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    ports:
+      - "8081:8081"
+    depends_on:
+      eureka-server:
+        condition: service_started
+      ms-usuarios:
+        condition: service_started
+      ms-activos:
+        condition: service_started
+      ms-protocolos:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - induztek-net
+
+volumes:
+  mysql-data:
+
+networks:
+  induztek-net:
+    driver: bridge

@@ -1,0 +1,39 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: ruta-ms-usuarios
+              uri: lb://ms-usuarios
+              predicates:
+                - Path=/api/usuarios,/api/usuarios/**,/api/roles,/api/roles/**
+            - id: ruta-ms-activos
+              uri: lb://ms-activos
+              predicates:
+                - Path=/api/clientes,/api/clientes/**,/api/instalaciones,/api/instalaciones/**,/api/equipos,/api/equipos/**,/api/instrumentos,/api/instrumentos/**,/api/sync/activos,/api/sync/activos/**
+            - id: ruta-ms-protocolos
+              uri: lb://ms-protocolos
+              predicates:
+                - Path=/api/visitas,/api/visitas/**,/api/protocolos,/api/protocolos/**,/api/sync/protocolos,/api/sync/protocolos/**
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+    hostname: api-gateway
+    instance-id: api-gateway:${server.port}
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

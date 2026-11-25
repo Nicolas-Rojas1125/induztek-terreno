@@ -57,7 +57,10 @@ import cl.duocuc.induztek.ui.components.BotonPrincipal
 import cl.duocuc.induztek.ui.components.BotonSecundario
 import cl.duocuc.induztek.ui.components.CampoFecha
 import cl.duocuc.induztek.ui.components.CampoSeleccion
+import cl.duocuc.induztek.ui.components.BarraBusqueda
 import cl.duocuc.induztek.ui.components.CampoTexto
+import cl.duocuc.induztek.ui.components.ControlPaginacion
+import cl.duocuc.induztek.ui.components.FiltrosChips
 import cl.duocuc.induztek.ui.components.Cargando
 import cl.duocuc.induztek.ui.components.ChipEstado
 import cl.duocuc.induztek.ui.components.ChipResultado
@@ -108,15 +111,12 @@ fun VisitasScreen(
             contentPadding = PaddingValues(Dimens.espacioPantalla),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            item { BarraBusqueda(ui.busqueda, viewModel::onBuscar, "Buscar por OT, instalación, cliente o ingeniero") }
             if (!ui.esCliente) {
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FiltroVisitas.entries.forEach { f ->
-                            FilterChip(selected = ui.filtro == f, onClick = { viewModel.onFiltro(f) }, label = { Text(f.etiqueta) })
-                        }
-                    }
-                }
+                item { FiltrosChips(FiltroVisitas.entries, ui.filtro, { it.etiqueta }, { viewModel.onFiltro(it) }) }
             }
+            item { FiltrosChips(TipoVisita.entries, ui.tipo, { it.etiqueta }, { viewModel.onTipo(it) }) }
+            if (ui.cargando && ui.visitas.isEmpty()) item { Cargando(Modifier.height(120.dp)) }
             if (!ui.cargando && ui.visitas.isEmpty()) {
                 item {
                     EstadoVacio(
@@ -144,6 +144,7 @@ fun VisitasScreen(
                     )
                 }
             }
+            item { ControlPaginacion(ui.pagina, viewModel::irAPagina) }
             item { Spacer(Modifier.height(72.dp)) }
         }
     }

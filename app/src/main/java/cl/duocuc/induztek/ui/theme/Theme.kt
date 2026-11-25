@@ -30,7 +30,13 @@ private val EsquemaClaro = lightColorScheme(
     error = RojoRechazado,
     onError = Blanco,
     errorContainer = RojoRechazadoFondo,
-    onErrorContainer = RojoRechazado
+    onErrorContainer = RojoRechazado,
+    surfaceContainerLowest = SuperficieClara,
+    surfaceContainerLow = ContenedorClaroBajo,
+    surfaceContainer = ContenedorClaro,
+    surfaceContainerHigh = ContenedorClaroAlto,
+    surfaceContainerHighest = SuperficieVariante,
+    outlineVariant = SuperficieVariante
 )
 
 private val EsquemaOscuro = darkColorScheme(
@@ -54,7 +60,13 @@ private val EsquemaOscuro = darkColorScheme(
     error = RojoRechazadoFondo,
     onError = RojoRechazado,
     errorContainer = RojoRechazado,
-    onErrorContainer = RojoRechazadoFondo
+    onErrorContainer = RojoRechazadoFondo,
+    surfaceContainerLowest = FondoOscuro,
+    surfaceContainerLow = ContenedorOscuroBajo,
+    surfaceContainer = ContenedorOscuro,
+    surfaceContainerHigh = ContenedorOscuroAlto,
+    surfaceContainerHighest = SuperficieOscuraVariante,
+    outlineVariant = SuperficieOscuraVariante
 )
 
 private val Formas = Shapes(

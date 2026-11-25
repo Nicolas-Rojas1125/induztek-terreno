@@ -2,30 +2,36 @@ package cl.duocuc.induztek.data.local
 
 import android.content.Context
 import androidx.core.content.edit
+import cl.duocuc.induztek.data.remote.ServiciosRemotos
 import java.util.UUID
 
 class SesionPreferencias(context: Context) {
     private val prefs = context.getSharedPreferences("induztek_sesion", Context.MODE_PRIVATE)
 
     companion object {
-        private const val CLAVE_ID_USUARIO = "id_usuario"
+        private const val CLAVE_SESION = "sesion_json"
         private const val CLAVE_DISPOSITIVO = "codigo_dispositivo"
         private const val CLAVE_TEMA = "tema"
         private const val CLAVE_ULTIMO_CORREO = "ultimo_correo"
-        private const val SIN_SESION = -1L
+        private const val CLAVE_SERVIDOR = "url_servidor"
+        private const val CLAVE_ULTIMA_DESCARGA = "ultima_descarga_protocolos"
+        private const val CLAVE_ULTIMA_SINCRONIZACION = "ultima_sincronizacion"
     }
 
-    fun guardarSesion(idUsuario: Long, correo: String) {
+    fun guardarSesion(json: String, correo: String) {
         prefs.edit {
-            putLong(CLAVE_ID_USUARIO, idUsuario)
+            putString(CLAVE_SESION, json)
             putString(CLAVE_ULTIMO_CORREO, correo)
         }
     }
 
-    fun idUsuario(): Long = prefs.getLong(CLAVE_ID_USUARIO, SIN_SESION)
+    fun sesionJson(): String? = prefs.getString(CLAVE_SESION, null)
 
     fun borrarSesion() {
-        prefs.edit { remove(CLAVE_ID_USUARIO) }
+        prefs.edit {
+            remove(CLAVE_SESION)
+            remove(CLAVE_ULTIMA_DESCARGA)
+        }
     }
 
     fun ultimoCorreo(): String = prefs.getString(CLAVE_ULTIMO_CORREO, "") ?: ""
@@ -42,5 +48,23 @@ class SesionPreferencias(context: Context) {
 
     fun guardarTema(valor: String) {
         prefs.edit { putString(CLAVE_TEMA, valor) }
+    }
+
+    fun servidor(): String = prefs.getString(CLAVE_SERVIDOR, ServiciosRemotos.URL_POR_DEFECTO) ?: ServiciosRemotos.URL_POR_DEFECTO
+
+    fun guardarServidor(url: String) {
+        prefs.edit { putString(CLAVE_SERVIDOR, url) }
+    }
+
+    fun ultimaDescarga(): Long = prefs.getLong(CLAVE_ULTIMA_DESCARGA, 0L)
+
+    fun guardarUltimaDescarga(millis: Long) {
+        prefs.edit { putLong(CLAVE_ULTIMA_DESCARGA, millis) }
+    }
+
+    fun ultimaSincronizacion(): Long? = prefs.getLong(CLAVE_ULTIMA_SINCRONIZACION, 0L).takeIf { it > 0 }
+
+    fun guardarUltimaSincronizacion(millis: Long) {
+        prefs.edit { putLong(CLAVE_ULTIMA_SINCRONIZACION, millis) }
     }
 }

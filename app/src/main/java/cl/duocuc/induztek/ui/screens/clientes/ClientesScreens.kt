@@ -10,7 +10,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -30,8 +30,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -45,17 +47,22 @@ import cl.duocuc.induztek.R
 import cl.duocuc.induztek.domain.util.Formato
 import cl.duocuc.induztek.ui.components.AparicionEscalonada
 import cl.duocuc.induztek.ui.components.AvisoInformativo
+import cl.duocuc.induztek.ui.components.BarraBusqueda
 import cl.duocuc.induztek.ui.components.BotonPrincipal
 import cl.duocuc.induztek.ui.components.BotonSecundario
 import cl.duocuc.induztek.ui.components.CampoSeleccion
 import cl.duocuc.induztek.ui.components.CampoTexto
 import cl.duocuc.induztek.ui.components.Cargando
+import cl.duocuc.induztek.ui.components.ControlPaginacion
+import cl.duocuc.induztek.ui.components.DialogoConfirmacion
 import cl.duocuc.induztek.ui.components.EstadoVacio
 import cl.duocuc.induztek.ui.components.FilaDato
 import cl.duocuc.induztek.ui.components.MostrarMensaje
 import cl.duocuc.induztek.ui.components.PantallaBase
+import cl.duocuc.induztek.ui.components.TarjetaClima
 import cl.duocuc.induztek.ui.components.TarjetaLista
 import cl.duocuc.induztek.ui.components.TarjetaSeccion
+import cl.duocuc.induztek.ui.components.TituloSeccion
 import cl.duocuc.induztek.ui.components.rememberSacudida
 import cl.duocuc.induztek.ui.components.sacudir
 import cl.duocuc.induztek.ui.theme.Dimens
@@ -73,10 +80,18 @@ fun ClientesScreen(
     viewModel: ClientesViewModel = viewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
+    val lista = ui.pagina.items
     PantallaBase(
         titulo = "Clientes",
-        subtitulo = "${ui.clientes.size} cliente(s)",
+        subtitulo = "${ui.pagina.totalElementos} cliente(s)",
         onVolver = onVolver,
+        snackbar = snackbar,
+        acciones = {
+            IconButton(onClick = viewModel::sincronizar) { Icon(painterResource(R.drawable.ic_sincronizar), contentDescription = "Sincronizar") }
+        },
         botonFlotante = {
             if (ui.puedeCrear) {
                 ExtendedFloatingActionButton(
@@ -92,26 +107,33 @@ fun ClientesScreen(
             contentPadding = PaddingValues(Dimens.espacioPantalla),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            item {
-                CampoTexto(
-                    valor = ui.busqueda, onValorCambia = viewModel::onBuscar, etiqueta = "Buscar por razón social o RUT",
-                    icono = R.drawable.ic_buscar
-                )
+            item { BarraBusqueda(ui.busqueda, viewModel::onBuscar, "Buscar por razón social, RUT o contacto") }
+            if (ui.cargando && lista.isEmpty()) item { Cargando(Modifier.height(120.dp)) }
+            if (!ui.cargando && lista.isEmpty()) {
+                item {
+                    EstadoVacio(
+                        R.drawable.ic_empresa,
+                        if (ui.busqueda.isBlank()) "Aún no hay clientes" else "Sin resultados",
+                        if (ui.busqueda.isBlank()) "Registre el primer cliente o sincronice con el servidor." else "Pruebe con otro texto de búsqueda."
+                    )
+                }
             }
-            if (!ui.cargando && ui.clientes.isEmpty()) {
-                item { EstadoVacio(R.drawable.ic_empresa, "Sin resultados", "Pruebe con otro texto de búsqueda.") }
-            }
-            items(ui.clientes, key = { it.id }) { cl ->
-                AparicionEscalonada(ui.clientes.indexOf(cl), Modifier.animateItem()) {
+            items(lista, key = { it.id }) { cl ->
+                AparicionEscalonada(lista.indexOf(cl), Modifier.animateItem()) {
                     TarjetaLista(
                         titulo = cl.razonSocial,
                         subtitulo = "RUT ${cl.rut} · ${cl.giro}",
-                        detalle = "${cl.cantidadInstalaciones} instalación(es) · ${cl.contactoNombre}",
+                        detalle = listOfNotNull(
+                            "${cl.cantidadInstalaciones} instalación(es)",
+                            cl.contactoNombre.ifBlank { null },
+                            cl.direccion.ifBlank { null }
+                        ).joinToString(" · "),
                         icono = R.drawable.ic_empresa,
                         onClick = { onCliente(cl.id) }
                     )
                 }
             }
+            item { ControlPaginacion(ui.pagina, viewModel::irAPagina) }
             item { Spacer(Modifier.height(72.dp)) }
         }
     }
@@ -126,7 +148,7 @@ fun ClienteFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, viewMode
     LaunchedEffect(ui.guardadoId) { ui.guardadoId?.let(onGuardado) }
     val sacudida = rememberSacudida(ui.intentosFallidos)
 
-    PantallaBase(titulo = "Nuevo cliente", subtitulo = "RF-01", onVolver = onVolver, snackbar = snackbar) { padding ->
+    PantallaBase(titulo = if (ui.editando) "Editar cliente" else "Nuevo cliente", subtitulo = "RF-01", onVolver = onVolver, snackbar = snackbar) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -153,8 +175,10 @@ fun ClienteFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, viewMode
                 CampoTexto(ui.correo.valor, viewModel::onCorreo, "Correo", R.drawable.ic_correo,
                     error = ui.correo.errorVisible, valido = ui.correo.valido, tipoTeclado = KeyboardType.Email,
                     capitalizacion = KeyboardCapitalization.None)
+                CampoTexto(ui.direccion.valor, viewModel::onDireccion, "Dirección comercial (opcional)", R.drawable.ic_ubicacion,
+                    error = ui.direccion.errorVisible, capitalizacion = KeyboardCapitalization.Words)
             }
-            BotonPrincipal("Guardar cliente", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
+            BotonPrincipal(if (ui.editando) "Guardar cambios" else "Guardar cliente", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -165,14 +189,36 @@ fun ClienteDetalleScreen(
     onVolver: () -> Unit,
     onInstalacion: (Long) -> Unit,
     onNuevaInstalacion: (Long) -> Unit,
+    onEditar: (Long) -> Unit,
     viewModel: ClienteDetalleViewModel = viewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
+    LaunchedEffect(ui.eliminado) { if (ui.eliminado) onVolver() }
+    var confirmar by rememberSaveable { mutableStateOf(false) }
     val cl = ui.cliente
+    if (confirmar && cl != null) {
+        DialogoConfirmacion(
+            "¿Eliminar cliente?",
+            "Se eliminará ${cl.razonSocial}. Solo es posible si no tiene instalaciones registradas.",
+            "Eliminar", { confirmar = false; viewModel.eliminar() }, { confirmar = false }, peligroso = true
+        )
+    }
     PantallaBase(
         titulo = cl?.razonSocial ?: "Cliente",
         subtitulo = cl?.let { "RUT ${it.rut}" },
         onVolver = onVolver,
+        snackbar = snackbar,
+        acciones = {
+            if (cl != null && ui.puedeEditar) {
+                IconButton(onClick = { onEditar(cl.id) }) { Icon(painterResource(R.drawable.ic_editar), contentDescription = "Editar") }
+            }
+            if (cl != null && ui.puedeEliminar) {
+                IconButton(onClick = { confirmar = true }) { Icon(painterResource(R.drawable.ic_eliminar), contentDescription = "Eliminar") }
+            }
+        },
         botonFlotante = {
             if (ui.puedeEditar && cl != null) {
                 ExtendedFloatingActionButton(
@@ -195,13 +241,17 @@ fun ClienteDetalleScreen(
         ) {
             item {
                 TarjetaSeccion("Ficha del cliente", icono = R.drawable.ic_empresa) {
-                    FilaDato("Giro", cl.giro)
+                    FilaDato("RUT", cl.rut, icono = R.drawable.ic_credencial)
+                    FilaDato("Giro", cl.giro, icono = R.drawable.ic_etiqueta)
+                    FilaDato("Dirección", cl.direccion.ifBlank { "—" }, icono = R.drawable.ic_ubicacion)
                     FilaDato("Contacto", cl.contactoNombre, icono = R.drawable.ic_persona)
                     FilaDato("Teléfono", cl.telefono, icono = R.drawable.ic_telefono)
                     FilaDato("Correo", cl.correo, icono = R.drawable.ic_correo)
+                    FilaDato("Cuentas de cliente activas", ui.cuentasCliente.toString(), icono = R.drawable.ic_grupo)
+                    FilaDato("Equipos registrados", ui.instalaciones.sumOf { it.cantidadEquipos }.toString(), icono = R.drawable.ic_rayo)
                 }
             }
-            item { Text("Instalaciones (${ui.instalaciones.size})", style = MaterialTheme.typography.titleMedium) }
+            item { TituloSeccion("Instalaciones (${ui.instalaciones.size})") }
             if (ui.instalaciones.isEmpty()) {
                 item { EstadoVacio(R.drawable.ic_ubicacion, "Sin instalaciones", "Registre la primera planta, subestación o faena.") }
             }
@@ -239,7 +289,7 @@ fun InstalacionFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, view
         else permisoUbicacion.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    PantallaBase(titulo = "Nueva instalación", subtitulo = ui.cliente?.razonSocial, onVolver = onVolver, snackbar = snackbar) { padding ->
+    PantallaBase(titulo = if (ui.editando) "Editar instalación" else "Nueva instalación", subtitulo = ui.cliente?.razonSocial, onVolver = onVolver, snackbar = snackbar) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -292,7 +342,7 @@ fun InstalacionFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, view
                     }
                 }
             }
-            BotonPrincipal("Guardar instalación", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
+            BotonPrincipal(if (ui.editando) "Guardar cambios" else "Guardar instalación", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -304,18 +354,40 @@ fun InstalacionDetalleScreen(
     onEquipo: (Long) -> Unit,
     onNuevoEquipo: (Long) -> Unit,
     onVisita: (Long) -> Unit,
+    onEditar: (Long) -> Unit,
     viewModel: InstalacionDetalleViewModel = viewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
+    LaunchedEffect(ui.eliminada) { if (ui.eliminada) onVolver() }
+    var confirmar by rememberSaveable { mutableStateOf(false) }
     val inst = ui.instalacion
     val s = ui.sesion
     val context = LocalContext.current
+    if (confirmar && inst != null) {
+        DialogoConfirmacion(
+            "¿Eliminar instalación?",
+            "Se eliminará ${inst.nombre}. Solo es posible si no tiene equipos registrados.",
+            "Eliminar", { confirmar = false; viewModel.eliminar() }, { confirmar = false }, peligroso = true
+        )
+    }
     PantallaBase(
         titulo = inst?.nombre ?: "Instalación",
         subtitulo = inst?.nombreCliente,
         onVolver = onVolver,
+        snackbar = snackbar,
+        acciones = {
+            if (inst != null && ui.puedeEditar) {
+                IconButton(onClick = { onEditar(inst.id) }) { Icon(painterResource(R.drawable.ic_editar), contentDescription = "Editar") }
+            }
+            if (inst != null && ui.puedeEliminar) {
+                IconButton(onClick = { confirmar = true }) { Icon(painterResource(R.drawable.ic_eliminar), contentDescription = "Eliminar") }
+            }
+        },
         botonFlotante = {
-            if (inst != null && s != null && !s.esCliente) {
+            if (inst != null && ui.puedeEditar) {
                 ExtendedFloatingActionButton(
                     onClick = { onNuevoEquipo(inst.id) },
                     icon = { Icon(painterResource(R.drawable.ic_agregar), contentDescription = null) },
@@ -336,9 +408,12 @@ fun InstalacionDetalleScreen(
         ) {
             item {
                 TarjetaSeccion("Ficha", icono = R.drawable.ic_ubicacion) {
+                    FilaDato("Cliente", inst.nombreCliente, icono = R.drawable.ic_empresa)
                     FilaDato("Comuna", "${inst.nombreComuna}, ${inst.nombreRegion}")
                     FilaDato("Ubicación", inst.ubicacion)
-                    FilaDato("Acceso", inst.observacionesAcceso, icono = R.drawable.ic_info)
+                    FilaDato("Acceso", inst.observacionesAcceso.ifBlank { "Sin observaciones" }, icono = R.drawable.ic_info)
+                    FilaDato("Equipos", ui.equipos.size.toString(), icono = R.drawable.ic_rayo)
+                    FilaDato("Visitas", "${ui.visitas.size} (${ui.visitas.count { !it.cerrada }} abiertas)", icono = R.drawable.ic_calendario)
                     if (inst.latitud != null && inst.longitud != null) {
                         FilaDato("GPS", Formato.coordenadas(inst.latitud, inst.longitud), icono = R.drawable.ic_ubicacion)
                         TextButton(onClick = {
@@ -348,11 +423,10 @@ fun InstalacionDetalleScreen(
                     }
                 }
             }
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Equipos (${ui.equipos.size})", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                }
+            if (inst.tieneCoordenadas) {
+                item { TarjetaClima(inst.latitud, inst.longitud) }
             }
+            item { TituloSeccion("Equipos (${ui.equipos.size})") }
             if (ui.equipos.isEmpty()) {
                 item { EstadoVacio(R.drawable.ic_rayo, "Sin equipos", "Registre el primer equipo de esta instalación (HU-01).") }
             }
@@ -366,9 +440,9 @@ fun InstalacionDetalleScreen(
                 )
             }
             item {
-                Text(
+                TituloSeccion(
                     if (s.esCliente) "Actas de visita (${ui.visitas.size})" else "Visitas (${ui.visitas.size})",
-                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)
+                    Modifier.padding(top = 8.dp)
                 )
             }
             items(ui.visitas, key = { "v${it.id}" }) { v ->

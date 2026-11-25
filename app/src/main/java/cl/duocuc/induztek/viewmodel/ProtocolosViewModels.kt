@@ -7,6 +7,7 @@ import cl.duocuc.induztek.domain.model.Cliente
 import cl.duocuc.induztek.domain.model.EstadoProtocolo
 import cl.duocuc.induztek.domain.model.HistorialEstado
 import cl.duocuc.induztek.domain.model.Operacion
+import cl.duocuc.induztek.domain.model.Pagina
 import cl.duocuc.induztek.domain.model.Permiso
 import cl.duocuc.induztek.domain.model.Protocolo
 import cl.duocuc.induztek.domain.model.ProtocoloResumen
@@ -23,6 +24,7 @@ import cl.duocuc.induztek.domain.reglas.EvaluadorPruebas
 import cl.duocuc.induztek.domain.reglas.MaquinaEstados
 import cl.duocuc.induztek.domain.reglas.Plazos
 import cl.duocuc.induztek.domain.util.Formato
+import cl.duocuc.induztek.domain.util.Paginador
 import cl.duocuc.induztek.domain.validacion.Validadores
 import cl.duocuc.induztek.nativo.TipoVibracion
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,15 +35,20 @@ import kotlinx.coroutines.flow.update
 data class ProtocolosUiState(
     val cargando: Boolean = true,
     val sesion: Sesion? = null,
-    val protocolos: List<ProtocoloResumen> = emptyList(),
+    val pagina: Pagina<ProtocoloResumen> = Pagina.vacia(),
     val estado: EstadoProtocolo? = null,
+    val resultado: Resultado? = null,
     val clientes: List<Cliente> = emptyList(),
     val cliente: Cliente? = null,
     val tecnicos: List<Usuario> = emptyList(),
     val tecnico: Usuario? = null,
     val busqueda: String = "",
     val soloAtrasados: Boolean = false
-)
+) {
+    val protocolos: List<ProtocoloResumen> get() = pagina.items
+    val hayFiltros: Boolean
+        get() = estado != null || resultado != null || cliente != null || tecnico != null || busqueda.isNotBlank() || soloAtrasados
+}
 
 class ProtocolosViewModel(application: Application) : BaseViewModel(application) {
     private val _ui = MutableStateFlow(ProtocolosUiState())
@@ -54,7 +61,7 @@ class ProtocolosViewModel(application: Application) : BaseViewModel(application)
                 _ui.update {
                     it.copy(
                         clientes = c.clientes.listarClientes(s),
-                        tecnicos = c.usuarios.activosPorRol(RolCodigo.TECNICO, RolCodigo.INGENIERO, RolCodigo.JEFE_TECNICO)
+                        tecnicos = c.usuarios.activosPorRol(RolCodigo.TECNICO, RolCodigo.INGENIERO, RolCodigo.ADMINISTRADOR)
                     )
                 }
             }
@@ -62,18 +69,22 @@ class ProtocolosViewModel(application: Application) : BaseViewModel(application)
         observarCambios { cargar() }
     }
 
-    private suspend fun cargar() {
+    private suspend fun cargar(pagina: Int = _ui.value.pagina.pagina) {
         val s = sesion ?: return
         val u = _ui.value
         var lista = c.protocolos.listar(s, u.estado, u.cliente?.id, u.tecnico?.id, u.busqueda)
+        if (u.resultado != null) lista = lista.filter { it.resultadoGlobal == u.resultado }
         if (u.soloAtrasados) {
             val hoy = Formato.hoy()
             lista = lista.filter { Plazos.estaAtrasado(it.estado, Formato.aFecha(it.fechaHoraPrueba), hoy) }
         }
-        _ui.update { it.copy(cargando = false, sesion = s, protocolos = lista) }
+        _ui.update { it.copy(cargando = false, sesion = s, pagina = Paginador.paginar(lista, pagina)) }
     }
 
-    private fun recargar() { lanzar { cargar() } }
+    private fun recargar() { lanzar { cargar(0) } }
+
+    fun irAPagina(pagina: Int) = lanzar { cargar(pagina) }
+    fun onResultado(r: Resultado?) { _ui.update { it.copy(resultado = if (it.resultado == r) null else r) }; recargar() }
 
     fun onEstado(e: EstadoProtocolo?) { _ui.update { it.copy(estado = if (it.estado == e) null else e) }; recargar() }
     fun onCliente(cl: Cliente?) { _ui.update { it.copy(cliente = cl) }; recargar() }
@@ -81,7 +92,7 @@ class ProtocolosViewModel(application: Application) : BaseViewModel(application)
     fun onBuscar(t: String) { _ui.update { it.copy(busqueda = t) }; recargar() }
     fun onSoloAtrasados() { _ui.update { it.copy(soloAtrasados = !it.soloAtrasados) }; recargar() }
     fun limpiarFiltros() {
-        _ui.update { it.copy(estado = null, cliente = null, tecnico = null, busqueda = "", soloAtrasados = false) }
+        _ui.update { it.copy(estado = null, resultado = null, cliente = null, tecnico = null, busqueda = "", soloAtrasados = false) }
         recargar()
     }
 }
@@ -106,7 +117,9 @@ data class ProtocoloUiState(
     val intentosFallidos: Int = 0,
     val nuevoProtocoloId: Long? = null,
     val tipoNoRealizada: TipoPrueba? = null,
-    val motivoNoRealizada: Campo = Campo()
+    val motivoNoRealizada: Campo = Campo(),
+    val latitud: Double? = null,
+    val longitud: Double? = null
 ) {
     val puedeEditar: Boolean
         get() {
@@ -159,10 +172,12 @@ class ProtocoloViewModel(application: Application, estado: SavedStateHandle) : B
         val pruebas = c.protocolos.pruebas(idProtocolo)
         val comparaciones = c.protocolos.comparaciones(p, s)
         val historial = if (s.esCliente) emptyList() else c.protocolos.historialEstados(idProtocolo)
+        val instalacion = c.visitas.obtener(p.idVisita, s)?.let { v -> c.clientes.obtenerInstalacion(v.idInstalacion, s) }
         _ui.update { actual ->
             val mantener = actual.cabeceraModificada && actual.protocolo?.id == p.id
             actual.copy(
                 cargando = false, sesion = s, protocolo = p, pruebas = pruebas, comparaciones = comparaciones, historial = historial,
+                latitud = instalacion?.latitud, longitud = instalacion?.longitud,
                 temperatura = if (mantener) actual.temperatura else Campo(p.temperaturaC?.let { Formato.numeroEditable(it) } ?: ""),
                 humedad = if (mantener) actual.humedad else Campo(p.humedadPct?.let { Formato.numeroEditable(it) } ?: ""),
                 mantenimiento = if (mantener) actual.mantenimiento else Campo(p.descripcionMantenimiento),
@@ -176,6 +191,19 @@ class ProtocoloViewModel(application: Application, estado: SavedStateHandle) : B
     fun onHumedad(v: String) = _ui.update { it.copy(humedad = it.humedad.cambiar(v, Validadores::humedad), cabeceraModificada = true) }
     fun onMantenimiento(v: String) = _ui.update { it.copy(mantenimiento = it.mantenimiento.cambiar(v, vMant), cabeceraModificada = true) }
     fun onObservaciones(v: String) = _ui.update { it.copy(observaciones = it.observaciones.cambiar(v, vObs), cabeceraModificada = true) }
+    fun aplicarClima(temperatura: Double, humedad: Double) {
+        if (!_ui.value.puedeEditar) return
+        _ui.update {
+            it.copy(
+                temperatura = it.temperatura.cambiar(Formato.numeroEditable(temperatura), Validadores::temperatura),
+                humedad = it.humedad.cambiar(Formato.numeroEditable(humedad), Validadores::humedad),
+                cabeceraModificada = true
+            )
+        }
+        vibrar(TipoVibracion.EXITO)
+        mostrar("Condiciones ambientales tomadas del clima actual: revise y guarde")
+    }
+
     fun onComentarioVariacion(v: String) =
         _ui.update { it.copy(comentarioVariacion = it.comentarioVariacion.cambiar(v, vComentario), cabeceraModificada = true) }
 
@@ -303,6 +331,7 @@ class ProtocoloViewModel(application: Application, estado: SavedStateHandle) : B
                     vibrar(if (accion == AccionProtocolo.ANULAR || accion == AccionProtocolo.OBSERVAR) TipoVibracion.ADVERTENCIA else TipoVibracion.EXITO)
                     _ui.update { it.copy(procesando = false, erroresTransicion = emptyList()) }
                     mostrar("Protocolo ${accion.destino.etiqueta.lowercase()}")
+                    c.solicitarSincronizacion()
                 }
                 is Operacion.Fallo -> {
                     vibrar(TipoVibracion.ERROR)

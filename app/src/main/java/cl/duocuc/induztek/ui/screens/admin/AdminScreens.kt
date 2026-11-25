@@ -75,8 +75,15 @@ import cl.duocuc.induztek.ui.theme.VerdeAprobadoFondo
 import cl.duocuc.induztek.viewmodel.InstrumentoDetalleViewModel
 import cl.duocuc.induztek.viewmodel.InstrumentoFormViewModel
 import cl.duocuc.induztek.viewmodel.InstrumentosViewModel
-import cl.duocuc.induztek.viewmodel.UsuarioFormViewModel
-import cl.duocuc.induztek.viewmodel.UsuariosViewModel
+import cl.duocuc.induztek.domain.model.Permiso
+import cl.duocuc.induztek.ui.components.BarraBusqueda
+import cl.duocuc.induztek.ui.components.ControlPaginacion
+import cl.duocuc.induztek.ui.components.DialogoConfirmacion
+import cl.duocuc.induztek.ui.components.FiltrosChips
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 
 private fun chipVigencia(v: VigenciaInstrumento): ColoresChip = when (v) {
     VigenciaInstrumento.VIGENTE -> ColoresChip(VerdeAprobado, VerdeAprobadoFondo, R.drawable.ic_check)
@@ -109,17 +116,30 @@ fun InstrumentosScreen(
         }
     ) { padding ->
         if (ui.cargando) { Cargando(Modifier.padding(padding)); return@PantallaBase }
+        val lista = ui.pagina.items
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(Dimens.espacioPantalla),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (!ui.puedeGestionar) {
-                item { AvisoInformativo("Solo el Jefe técnico registra instrumentos y calibraciones (RN-12).") }
+            item {
+                BarraBusqueda(ui.busqueda, viewModel::onBuscar, "Buscar por nombre, marca, modelo o Nº de serie")
             }
-            items(ui.instrumentos, key = { it.id }) { inst ->
+            item {
+                FiltrosChips(VigenciaInstrumento.entries, ui.vigencia, { it.etiqueta }, { viewModel.onVigencia(it) })
+            }
+            item {
+                FiltrosChips(CategoriaInstrumento.entries, ui.categoria, { it.etiqueta }, { viewModel.onCategoria(it) })
+            }
+            if (!ui.puedeGestionar) {
+                item { AvisoInformativo("Solo el administrador registra instrumentos y calibraciones (RN-12).") }
+            }
+            if (lista.isEmpty()) {
+                item { EstadoVacio(R.drawable.ic_herramienta, "Sin instrumentos", "No hay instrumentos que coincidan con los filtros.") }
+            }
+            items(lista, key = { it.id }) { inst ->
                 val vig = ReglasInstrumento.vigencia(inst.vencimiento, hoy)
-                AparicionEscalonada(ui.instrumentos.indexOf(inst), Modifier.animateItem()) {
+                AparicionEscalonada(lista.indexOf(inst), Modifier.animateItem()) {
                     TarjetaLista(
                         titulo = inst.nombre,
                         subtitulo = "${inst.marca} ${inst.modelo} · Nº ${inst.numeroSerie}",
@@ -141,6 +161,7 @@ fun InstrumentosScreen(
                     )
                 }
             }
+            item { ControlPaginacion(ui.pagina, viewModel::irAPagina) }
             item { Spacer(Modifier.height(72.dp)) }
         }
     }
@@ -155,7 +176,7 @@ fun InstrumentoFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, view
     LaunchedEffect(ui.guardadoId) { ui.guardadoId?.let(onGuardado) }
     val sacudida = rememberSacudida(ui.intentosFallidos)
 
-    PantallaBase(titulo = "Nuevo instrumento", subtitulo = "RN-12", onVolver = onVolver, snackbar = snackbar) { padding ->
+    PantallaBase(titulo = if (ui.editando) "Editar instrumento" else "Nuevo instrumento", subtitulo = "RN-12", onVolver = onVolver, snackbar = snackbar) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(Dimens.espacioPantalla),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -175,9 +196,13 @@ fun InstrumentoFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, view
                 CampoTexto(ui.serie.valor, viewModel::onSerie, "Número de serie", R.drawable.ic_numero,
                     error = ui.serie.errorVisible, valido = ui.serie.valido, capitalizacion = KeyboardCapitalization.Characters)
             }
-            TarjetaSeccion("Certificado de calibración", icono = R.drawable.ic_verificado) {
-                CampoFecha("Fecha de calibración", ui.fechaCalibracion, viewModel::onFechaCalibracion, error = ui.errorCalibracion, permitirFuturas = false)
-                CampoFecha("Fecha de vencimiento", ui.fechaVencimiento, viewModel::onFechaVencimiento, error = ui.errorVencimiento)
+            if (!ui.editando) {
+                TarjetaSeccion("Certificado de calibración", icono = R.drawable.ic_verificado) {
+                    CampoFecha("Fecha de calibración", ui.fechaCalibracion, viewModel::onFechaCalibracion, error = ui.errorCalibracion, permitirFuturas = false)
+                    CampoFecha("Fecha de vencimiento", ui.fechaVencimiento, viewModel::onFechaVencimiento, error = ui.errorVencimiento)
+                }
+            } else {
+                AvisoInformativo("Las calibraciones nuevas se registran desde el detalle del instrumento.")
             }
             BotonPrincipal("Guardar instrumento", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
         }
@@ -185,15 +210,35 @@ fun InstrumentoFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, view
 }
 
 @Composable
-fun InstrumentoDetalleScreen(onVolver: () -> Unit, viewModel: InstrumentoDetalleViewModel = viewModel()) {
+fun InstrumentoDetalleScreen(
+    onVolver: () -> Unit,
+    onEditar: (Long) -> Unit,
+    viewModel: InstrumentoDetalleViewModel = viewModel()
+) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
+    LaunchedEffect(ui.eliminado) { if (ui.eliminado) onVolver() }
     val inst = ui.instrumento
     val hoy = remember { Formato.hoy() }
+    var confirmarEliminar by rememberSaveable { mutableStateOf(false) }
+    if (confirmarEliminar && inst != null) {
+        DialogoConfirmacion(
+            "¿Eliminar instrumento?", "Se eliminará ${inst.nombre} (Nº ${inst.numeroSerie}) y su historial de calibraciones en el servidor.",
+            "Eliminar", { confirmarEliminar = false; viewModel.eliminar() }, { confirmarEliminar = false }, peligroso = true
+        )
+    }
 
-    PantallaBase(titulo = inst?.nombre ?: "Instrumento", subtitulo = inst?.let { "Nº ${it.numeroSerie}" }, onVolver = onVolver, snackbar = snackbar) { padding ->
+    PantallaBase(
+        titulo = inst?.nombre ?: "Instrumento", subtitulo = inst?.let { "Nº ${it.numeroSerie}" }, onVolver = onVolver, snackbar = snackbar,
+        acciones = {
+            if (inst != null && ui.puedeGestionar) {
+                IconButton(onClick = { onEditar(inst.id) }) { Icon(painterResource(R.drawable.ic_editar), contentDescription = "Editar") }
+                IconButton(onClick = { confirmarEliminar = true }) { Icon(painterResource(R.drawable.ic_eliminar), contentDescription = "Eliminar") }
+            }
+        }
+    ) { padding ->
         if (ui.cargando) { Cargando(Modifier.padding(padding)); return@PantallaBase }
         if (inst == null) { EstadoVacio(R.drawable.ic_herramienta, "No encontrado", "", Modifier.padding(padding)); return@PantallaBase }
         LazyColumn(
@@ -209,6 +254,8 @@ fun InstrumentoDetalleScreen(onVolver: () -> Unit, viewModel: InstrumentoDetalle
                     FilaDato("Nº de serie", inst.numeroSerie)
                     FilaDato("Última calibración", inst.ultimaCalibracion?.let { Formato.fecha(it) } ?: "")
                     FilaDato("Vencimiento", inst.vencimiento?.let { Formato.fecha(it) } ?: "")
+                    FilaDato("Sirve para", inst.categoria.pruebas.joinToString { it.etiqueta })
+                    FilaDato("Calibraciones registradas", ui.calibraciones.size.toString())
                 }
             }
             if (ui.puedeGestionar) {
@@ -240,128 +287,6 @@ fun InstrumentoDetalleScreen(onVolver: () -> Unit, viewModel: InstrumentoDetalle
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun UsuariosScreen(onVolver: () -> Unit, onNuevo: () -> Unit, viewModel: UsuariosViewModel = viewModel()) {
-    val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
-    PantallaBase(
-        titulo = "Personal y cuentas",
-        subtitulo = "RF-22 · RN-20",
-        onVolver = onVolver,
-        snackbar = snackbar,
-        botonFlotante = {
-            if (ui.puedeGestionar) {
-                ExtendedFloatingActionButton(
-                    onClick = onNuevo,
-                    icon = { Icon(painterResource(R.drawable.ic_agregar), contentDescription = null) },
-                    text = { Text("Nueva cuenta") }
-                )
-            }
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(Dimens.espacioPantalla),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            item { CampoTexto(ui.busqueda, viewModel::onBuscar, "Buscar por nombre, correo o RUT", R.drawable.ic_buscar) }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(RolCodigo.entries) { r ->
-                        FilterChip(selected = ui.rol == r, onClick = { viewModel.onRol(r) }, label = { Text(r.etiqueta) })
-                    }
-                }
-            }
-            item {
-                Text(
-                    "Desactivar no borra: el usuario no podrá ingresar, pero sus protocolos conservan su nombre (Aclaración nº 8).",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            items(ui.usuarios, key = { it.id }) { u ->
-                TarjetaLista(
-                    titulo = u.nombre,
-                    subtitulo = "${u.rol.etiqueta} · ${u.correo}",
-                    detalle = "RUT ${u.rut}" + if (u.nombreCliente.isNotBlank()) " · ${u.nombreCliente}" else "",
-                    icono = R.drawable.ic_persona,
-                    colorIcono = if (u.activo) MaterialTheme.colorScheme.primary else GrisNeutro,
-                    onClick = null,
-                    derecha = {
-                        Switch(
-                            checked = u.activo,
-                            onCheckedChange = { viewModel.cambiarActivo(u) },
-                            enabled = ui.puedeGestionar && u.id != ui.idPropio
-                        )
-                    }
-                )
-            }
-            item { Spacer(Modifier.height(72.dp)) }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun UsuarioFormScreen(onVolver: () -> Unit, onGuardado: (Long) -> Unit, viewModel: UsuarioFormViewModel = viewModel()) {
-    val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
-    LaunchedEffect(ui.guardadoId) { ui.guardadoId?.let(onGuardado) }
-    val sacudida = rememberSacudida(ui.intentosFallidos)
-    val roles = RolCodigo.entries
-
-    PantallaBase(titulo = "Nueva cuenta", subtitulo = "Personal o usuario cliente", onVolver = onVolver, snackbar = snackbar) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(Dimens.espacioPantalla),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TarjetaSeccion("Perfil", icono = R.drawable.ic_credencial) {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    roles.forEachIndexed { i, r ->
-                        SegmentedButton(
-                            selected = ui.rol == r, onClick = { viewModel.onRol(r) },
-                            shape = SegmentedButtonDefaults.itemShape(index = i, count = roles.size),
-                            label = { Text(r.etiqueta.substringBefore(" "), maxLines = 1) }
-                        )
-                    }
-                }
-                Text("${ui.rol.perfil} · ${ui.rol.etiqueta}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                AnimatedVisibility(visible = ui.rol == RolCodigo.CLIENTE) {
-                    CampoSeleccion(
-                        etiqueta = "Empresa cliente", opciones = ui.clientes, seleccion = ui.cliente, onSeleccionar = viewModel::onCliente,
-                        texto = { it.razonSocial }, icono = R.drawable.ic_empresa, error = ui.errorCliente,
-                        ayuda = "Solo verá la información de esta empresa (RN-18)"
-                    )
-                }
-            }
-            TarjetaSeccion("Datos personales", icono = R.drawable.ic_persona, modifier = Modifier.sacudir(sacudida)) {
-                CampoTexto(ui.nombre.valor, viewModel::onNombre, "Nombre completo", R.drawable.ic_persona,
-                    error = ui.nombre.errorVisible, valido = ui.nombre.valido, capitalizacion = KeyboardCapitalization.Words)
-                CampoTexto(ui.rut.valor, viewModel::onRut, "RUT", R.drawable.ic_credencial,
-                    error = ui.rut.errorVisible, valido = ui.rut.valido, capitalizacion = KeyboardCapitalization.Characters)
-                CampoTexto(ui.cargo.valor, viewModel::onCargo, "Cargo", R.drawable.ic_etiqueta,
-                    error = ui.cargo.errorVisible, valido = ui.cargo.valido)
-                CampoTexto(ui.telefono.valor, viewModel::onTelefono, "Teléfono", R.drawable.ic_telefono,
-                    error = ui.telefono.errorVisible, valido = ui.telefono.valido, tipoTeclado = KeyboardType.Phone)
-            }
-            TarjetaSeccion("Credenciales de ingreso (RF-14)", icono = R.drawable.ic_candado) {
-                CampoTexto(ui.correo.valor, viewModel::onCorreo, "Correo", R.drawable.ic_correo,
-                    error = ui.correo.errorVisible, valido = ui.correo.valido, tipoTeclado = KeyboardType.Email,
-                    capitalizacion = KeyboardCapitalization.None)
-                CampoContrasena(ui.contrasena.valor, viewModel::onContrasena, "Contraseña inicial", ui.contrasenaVisible,
-                    viewModel::onAlternarVisible, error = ui.contrasena.errorVisible)
-                Text("Mínimo 8 caracteres con letras y números. Se guarda cifrada (hash con sal).",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            BotonPrincipal("Crear cuenta", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
-            Spacer(Modifier.height(24.dp))
         }
     }
 }

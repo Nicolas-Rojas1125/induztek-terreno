@@ -24,11 +24,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -66,7 +68,12 @@ import cl.duocuc.induztek.viewmodel.LoginUiState
 import cl.duocuc.induztek.viewmodel.LoginViewModel
 
 @Composable
-fun LoginScreen(onIngreso: () -> Unit, viewModel: LoginViewModel = viewModel()) {
+fun LoginScreen(
+    onIngreso: () -> Unit,
+    onRecuperar: () -> Unit,
+    onServidor: () -> Unit,
+    viewModel: LoginViewModel = viewModel(factory = LoginViewModel.Fabrica)
+) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     LaunchedEffect(ui.exito) { if (ui.exito) onIngreso() }
     LoginContenido(
@@ -75,18 +82,10 @@ fun LoginScreen(onIngreso: () -> Unit, viewModel: LoginViewModel = viewModel()) 
         onContrasena = viewModel::onContrasena,
         onAlternarVisible = viewModel::onAlternarVisible,
         onIngresar = viewModel::ingresar,
-        onCuentaDemo = viewModel::usarCuentaDemo
+        onRecuperar = onRecuperar,
+        onServidor = onServidor
     )
 }
-
-private data class CuentaDemo(val etiqueta: String, val correo: String)
-
-private val cuentasDemo = listOf(
-    CuentaDemo("Técnico · Matías", "mgodoy@induztek.ejemplo"),
-    CuentaDemo("Ingeniera · Andrea", "acontreras@induztek.ejemplo"),
-    CuentaDemo("Jefe técnico · Ricardo", "respinoza@induztek.ejemplo"),
-    CuentaDemo("Cliente · Marcela", "mfuentes@envpacifico.ejemplo")
-)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -96,7 +95,8 @@ fun LoginContenido(
     onContrasena: (String) -> Unit,
     onAlternarVisible: () -> Unit,
     onIngresar: () -> Unit,
-    onCuentaDemo: (String) -> Unit
+    onRecuperar: () -> Unit,
+    onServidor: () -> Unit
 ) {
     val sacudida = rememberSacudida(ui.intentosFallidos)
 
@@ -186,28 +186,23 @@ fun LoginContenido(
                     icono = R.drawable.ic_candado,
                     cargando = ui.cargando
                 )
+                TextButton(onClick = onRecuperar, modifier = Modifier.align(Alignment.End)) {
+                    Text("¿Olvidó su contraseña?")
+                }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
-            "Cuentas de demostración (datos ficticios del Anexo 9)",
-            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
+            "Primer ingreso: admin@induztek.cl · Induztek2026 (cuenta creada por el servidor)",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(6.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
-            cuentasDemo.forEach { cuenta ->
-                AssistChip(
-                    onClick = { onCuentaDemo(cuenta.correo) },
-                    label = { Text(cuenta.etiqueta) },
-                    leadingIcon = { Icon(painterResource(R.drawable.ic_persona), contentDescription = null, modifier = Modifier.size(18.dp)) }
-                )
-            }
+        TextButton(onClick = onServidor) {
+            Icon(painterResource(R.drawable.ic_servidor), contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Configurar servidor")
         }
-        Text(
-            "Contraseña de todas las cuentas: Induztek2026",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -216,6 +211,6 @@ fun LoginContenido(
 @Composable
 private fun LoginPreview() {
     InduztekTheme {
-        LoginContenido(LoginUiState(), {}, {}, {}, {}, {})
+        LoginContenido(LoginUiState(), {}, {}, {}, {}, {}, {})
     }
 }

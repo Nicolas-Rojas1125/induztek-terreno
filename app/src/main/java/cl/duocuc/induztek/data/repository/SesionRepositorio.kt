@@ -1,104 +1,124 @@
 package cl.duocuc.induztek.data.repository
 
-import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
+import cl.duocuc.induztek.data.local.EspejoLocal
 import cl.duocuc.induztek.data.local.InduztekDbHelper
+import cl.duocuc.induztek.data.local.JsonLocal
 import cl.duocuc.induztek.data.local.SesionPreferencias
-import cl.duocuc.induztek.data.local.booleano
-import cl.duocuc.induztek.data.local.consultar
-import cl.duocuc.induztek.data.local.consultarUno
-import cl.duocuc.induztek.data.local.largo
-import cl.duocuc.induztek.data.local.largoONulo
-import cl.duocuc.induztek.data.local.texto
-import cl.duocuc.induztek.data.local.textoONulo
+import cl.duocuc.induztek.data.remote.UsuariosRemoto
+import cl.duocuc.induztek.domain.model.CodigoRecuperacion
+import cl.duocuc.induztek.domain.model.MatrizPermisos
 import cl.duocuc.induztek.domain.model.Operacion
-import cl.duocuc.induztek.domain.model.Permiso
 import cl.duocuc.induztek.domain.model.RolCodigo
 import cl.duocuc.induztek.domain.model.Sesion
-import cl.duocuc.induztek.domain.validacion.HashContrasena
+import cl.duocuc.induztek.domain.model.Usuario
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
+data class SesionGuardada(
+    val idUsuario: Long,
+    val nombre: String?,
+    val correo: String?,
+    val rol: String?,
+    val idCliente: Long?,
+    val nombreCliente: String?,
+    val cargo: String?,
+    val rut: String?,
+    val telefono: String?
+) {
+    fun aSesion(): Sesion {
+        val r = RolCodigo.desdeCodigo(rol.orEmpty())
+        return Sesion(
+            idUsuario = idUsuario, nombre = nombre.orEmpty(), correo = correo.orEmpty(), rol = r,
+            permisos = MatrizPermisos.permisosDe(r), idCliente = idCliente, nombreCliente = nombreCliente,
+            cargo = cargo, rut = rut.orEmpty(), telefono = telefono.orEmpty()
+        )
+    }
+
+    companion object {
+        fun de(s: Sesion) = SesionGuardada(
+            s.idUsuario, s.nombre, s.correo, s.rol.name, s.idCliente, s.nombreCliente, s.cargo, s.rut, s.telefono
+        )
+    }
+}
+
 class SesionRepositorio(
     helper: InduztekDbHelper,
     cambios: NotificadorCambios,
-    private val prefs: SesionPreferencias
-) : RepositorioBase(helper, cambios) {
+    private val prefs: SesionPreferencias,
+    private val remoto: UsuariosRemoto
+) : RepositorioBase(helper, cambios), Autenticacion, CuentaFuente {
     private val _sesion = MutableStateFlow(restaurar())
-    val sesion: StateFlow<Sesion?> = _sesion.asStateFlow()
+    override val sesion: StateFlow<Sesion?> = _sesion.asStateFlow()
 
     private val _tema = MutableStateFlow(prefs.tema())
     val tema: StateFlow<String> = _tema.asStateFlow()
 
+    private val _servidor = MutableStateFlow(prefs.servidor())
+    val servidor: StateFlow<String> = _servidor.asStateFlow()
+
     val codigoDispositivo: String get() = prefs.codigoDispositivo()
-    val ultimoCorreo: String get() = prefs.ultimoCorreo()
+    override val ultimoCorreo: String get() = prefs.ultimoCorreo()
 
-    private fun restaurar(): Sesion? {
-        val id = prefs.idUsuario()
-        if (id < 0) return null
-        val s = cargarSesion(helper.readableDatabase, id)
-        if (s == null) prefs.borrarSesion()
-        return s
+    private fun restaurar(): Sesion? =
+        JsonLocal.desdeTexto(prefs.sesionJson(), SesionGuardada::class.java)?.takeIf { it.idUsuario > 0 }?.aSesion()
+
+    private fun guardar(s: Sesion) {
+        prefs.guardarSesion(JsonLocal.aTexto(SesionGuardada.de(s)), s.correo)
+        _sesion.value = s
     }
 
-    private fun cargarSesion(db: SQLiteDatabase, idUsuario: Long): Sesion? {
-        val base = db.consultarUno(
-            """SELECT u.id_usuario, u.nombre, u.correo, u.cargo, u.activo, u.id_cliente,
-                      r.codigo AS rol, c.razon_social
-               FROM usuario u
-               JOIN rol r ON r.id_rol = u.id_rol
-               LEFT JOIN cliente c ON c.id_cliente = u.id_cliente
-               WHERE u.id_usuario = ?""",
-            listOf(idUsuario)
-        ) { c ->
-            if (!c.booleano("activo")) null
-            else Sesion(
-                idUsuario = c.largo("id_usuario"),
-                nombre = c.texto("nombre"),
-                correo = c.texto("correo"),
-                rol = RolCodigo.desdeCodigo(c.texto("rol")),
-                permisos = emptySet(),
-                idCliente = c.largoONulo("id_cliente"),
-                nombreCliente = c.textoONulo("razon_social"),
-                cargo = c.texto("cargo")
+    private suspend fun reflejarUsuarioLocal(s: Sesion) = withContext(Dispatchers.IO) {
+        if (s.rol == RolCodigo.CLIENTE) return@withContext
+        try {
+            EspejoLocal.usuario(
+                helper.writableDatabase,
+                Usuario(id = s.idUsuario, rol = s.rol, rut = s.rut, nombre = s.nombre, correo = s.correo,
+                    telefono = s.telefono, cargo = s.cargo.orEmpty())
             )
-        } ?: return null
-
-        val permisos = db.consultar(
-            """SELECT p.codigo FROM permiso p
-               JOIN rol_permiso rp ON rp.id_permiso = p.id_permiso
-               JOIN usuario u ON u.id_rol = rp.id_rol
-               WHERE u.id_usuario = ?""",
-            listOf(idUsuario)
-        ) { c -> Permiso.entries.firstOrNull { it.name == c.texto("codigo") } }.filterNotNull().toSet()
-
-        return base.copy(permisos = permisos)
+        } catch (e: SQLiteException) {
+            Unit
+        }
     }
 
-    suspend fun iniciarSesion(correo: String, contrasena: String): Operacion<Sesion> = withContext(Dispatchers.IO) {
-        val db = helper.readableDatabase
-        data class Credencial(val id: Long, val hash: String, val sal: String, val activo: Boolean)
+    override suspend fun iniciarSesion(correo: String, contrasena: String): Operacion<Sesion> {
+        val r = remoto.login(correo, contrasena)
+        if (r is Operacion.Exito) {
+            guardar(r.valor)
+            reflejarUsuarioLocal(r.valor)
+        }
+        return r
+    }
 
-        val cred = db.consultarUno(
-            "SELECT id_usuario, password_hash, sal, activo FROM usuario WHERE correo = ? COLLATE NOCASE",
-            listOf(correo.trim())
-        ) { c -> Credencial(c.largo("id_usuario"), c.texto("password_hash"), c.texto("sal"), c.booleano("activo")) }
+    override suspend fun recuperar(correo: String): Operacion<CodigoRecuperacion> = remoto.recuperar(correo)
 
-        when {
-            cred == null || !HashContrasena.verificar(contrasena, cred.sal, cred.hash) ->
-                Operacion.Fallo("Correo o contraseña incorrectos")
-            !cred.activo ->
-                Operacion.Fallo("Usuario desactivado. Contacte al Jefe técnico (Aclaración nº 8)")
-            else -> {
-                val s = cargarSesion(db, cred.id)
-                if (s == null) Operacion.Fallo("No se pudo cargar el perfil")
-                else {
-                    prefs.guardarSesion(s.idUsuario, s.correo)
-                    _sesion.value = s
-                    Operacion.Exito(s)
+    override suspend fun restablecer(correo: String, codigo: String, nueva: String): Operacion<String> =
+        remoto.restablecer(correo, codigo, nueva)
+
+    override suspend fun cambiarContrasena(actual: String, nueva: String): Operacion<Unit> {
+        val s = _sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        return remoto.cambiarContrasena(s.idUsuario, actual, nueva)
+    }
+
+    override suspend fun editarPerfil(nombre: String, correo: String, telefono: String, cargo: String): Operacion<Sesion> {
+        val s = _sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        return when (val r = remoto.actualizar(s.idUsuario, s.idUsuario, nombre, correo, telefono, cargo)) {
+            is Operacion.Fallo -> r
+            is Operacion.Exito -> {
+                val nueva = s.copy(nombre = r.valor.nombre, correo = r.valor.correo, telefono = r.valor.telefono, cargo = r.valor.cargo)
+                guardar(nueva)
+                withContext(Dispatchers.IO) {
+                    try {
+                        EspejoLocal.usuario(helper.writableDatabase, r.valor)
+                    } catch (e: SQLiteException) {
+                        Unit
+                    }
                 }
+                cambios.notificar()
+                Operacion.Exito(nueva)
             }
         }
     }
@@ -111,5 +131,10 @@ class SesionRepositorio(
     fun cambiarTema(valor: String) {
         prefs.guardarTema(valor)
         _tema.value = valor
+    }
+
+    fun cambiarServidor(url: String) {
+        prefs.guardarServidor(url.trim())
+        _servidor.value = url.trim()
     }
 }

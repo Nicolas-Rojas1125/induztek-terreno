@@ -44,11 +44,7 @@ import cl.duocuc.induztek.ui.components.EstadoVacio
 import cl.duocuc.induztek.ui.components.FilaDato
 import cl.duocuc.induztek.ui.components.MostrarMensaje
 import cl.duocuc.induztek.ui.components.PantallaBase
-import cl.duocuc.induztek.ui.theme.Ambar
-import cl.duocuc.induztek.ui.theme.AzulInduztek
-import cl.duocuc.induztek.ui.theme.Blanco
 import cl.duocuc.induztek.ui.theme.Dimens
-import cl.duocuc.induztek.ui.theme.TextoOscuro
 import cl.duocuc.induztek.viewmodel.ActaViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,12 +93,12 @@ fun ActaScreen(onVolver: () -> Unit, viewModel: ActaViewModel = viewModel()) {
                 )
             }
             item {
-                Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = AzulInduztek)) {
+                Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("INDUZTEK INGENIERÍA SpA", color = Blanco, style = MaterialTheme.typography.titleMedium)
-                        Text("Acta de prueba en terreno · OT ${acta.visita.numeroOt}", color = Blanco.copy(alpha = 0.85f), style = MaterialTheme.typography.bodyMedium)
+                        Text("INDUZTEK INGENIERÍA SpA", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
+                        Text("Acta de prueba en terreno · OT ${acta.visita.numeroOt}", color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(10.dp))
-                        Surface(color = Ambar, contentColor = TextoOscuro, shape = MaterialTheme.shapes.small) {
+                        Surface(color = MaterialTheme.colorScheme.secondary, contentColor = MaterialTheme.colorScheme.onSecondary, shape = MaterialTheme.shapes.small) {
                             Text(
                                 VisibilidadCliente.PENDIENTE.uppercase(), modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold

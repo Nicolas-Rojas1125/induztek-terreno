@@ -76,14 +76,14 @@ class ProtocoloRepositorio(
     private val sqlResumen = """
         SELECT p.id_protocolo, p.numero, p.estado, p.fecha_hora_prueba, p.resultado_global,
                p.id_usuario_registra, e.id_equipo, e.tag, e.tipo_equipo, i.nombre AS instalacion,
-               i.id_cliente, c.razon_social, u.nombre AS tecnico, v.numero_ot,
+               i.id_cliente, c.razon_social, COALESCE(u.nombre, 'Usuario ' || p.id_usuario_registra) AS tecnico, v.numero_ot,
                $sqlReemplazadoPor AS reemplazado_por
         FROM protocolo p
         JOIN equipo e ON e.id_equipo = p.id_equipo
         JOIN visita v ON v.id_visita = p.id_visita
         JOIN instalacion i ON i.id_instalacion = v.id_instalacion
         JOIN cliente c ON c.id_cliente = i.id_cliente
-        JOIN usuario u ON u.id_usuario = p.id_usuario_registra
+        LEFT JOIN usuario u ON u.id_usuario = p.id_usuario_registra
         WHERE 1 = 1 """
 
     private fun leerResumen(c: Cursor) = ProtocoloResumen(

@@ -15,7 +15,7 @@ class InduztekDbHelper private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, NOMBRE_BD, null, VERSION_BD) {
     companion object {
         const val NOMBRE_BD = "induztek.db"
-        const val VERSION_BD = 1
+        const val VERSION_BD = 2
 
         @Volatile
         private var instancia: InduztekDbHelper? = null
@@ -34,6 +34,14 @@ class InduztekDbHelper private constructor(context: Context) :
         private val MOMENTOS = valoresEnum(Momento.entries.map { it.name })
         private val TIPOS_VISITA = valoresEnum(TipoVisita.entries.map { it.name })
         private val CATEGORIAS = valoresEnum(CategoriaInstrumento.entries.map { it.name })
+
+        private const val COLUMNAS_PROTOCOLO = "uuid, numero, id_visita, id_equipo, id_usuario_registra, fecha_hora_prueba, " +
+            "temperatura_c, humedad_pct, descripcion_mantenimiento, observaciones, comentario_variacion, estado, " +
+            "resultado_global, id_protocolo_reemplazado"
+
+        private const val COLUMNAS_VISITA = "numero_ot, id_instalacion, fecha, tipo_visita, id_ingeniero_cargo, " +
+            "fecha_hora_cierre, latitud_cierre, longitud_cierre, id_usuario_cierra"
+
 
         val SQL_CREAR: List<String> = listOf(
             """CREATE TABLE region (
@@ -64,7 +72,8 @@ class InduztekDbHelper private constructor(context: Context) :
                 giro TEXT NOT NULL,
                 contacto_nombre TEXT NOT NULL,
                 telefono TEXT NOT NULL,
-                correo TEXT NOT NULL)""",
+                correo TEXT NOT NULL,
+                direccion TEXT NOT NULL DEFAULT '')""",
             """CREATE TABLE usuario (
                 id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
                 id_rol INTEGER NOT NULL REFERENCES rol(id_rol),
@@ -74,8 +83,6 @@ class InduztekDbHelper private constructor(context: Context) :
                 correo TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 telefono TEXT NOT NULL DEFAULT '',
                 cargo TEXT NOT NULL DEFAULT '',
-                password_hash TEXT NOT NULL,
-                sal TEXT NOT NULL,
                 activo INTEGER NOT NULL DEFAULT 1 CHECK(activo IN (0,1)))""",
             """CREATE TRIGGER tg_usuario_cliente_con_empresa
                 BEFORE INSERT ON usuario
@@ -107,8 +114,9 @@ class InduztekDbHelper private constructor(context: Context) :
                 corriente_nominal_a REAL,
                 max_contactos_uohm REAL,
                 observaciones TEXT NOT NULL DEFAULT '',
+                datos_tecnicos TEXT NOT NULL DEFAULT '{}',
                 foto_placa TEXT,
-                id_usuario_crea INTEGER REFERENCES usuario(id_usuario),
+                id_usuario_crea INTEGER,
                 UNIQUE(id_instalacion, tag))""",
             """CREATE TABLE instrumento (
                 id_instrumento INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,12 +130,14 @@ class InduztekDbHelper private constructor(context: Context) :
                 id_instrumento INTEGER NOT NULL REFERENCES instrumento(id_instrumento),
                 fecha_calibracion TEXT NOT NULL,
                 fecha_vencimiento TEXT NOT NULL,
-                id_usuario_registra INTEGER REFERENCES usuario(id_usuario),
+                id_usuario_registra INTEGER,
+                registrada_por TEXT NOT NULL DEFAULT '',
                 CHECK(fecha_vencimiento > fecha_calibracion))""",
 
             """CREATE TABLE visita (
                 id_visita INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_ot TEXT NOT NULL UNIQUE,
+                uuid TEXT NOT NULL UNIQUE,
+                numero_ot TEXT NOT NULL,
                 id_instalacion INTEGER NOT NULL REFERENCES instalacion(id_instalacion),
                 fecha TEXT NOT NULL,
                 tipo_visita TEXT NOT NULL CHECK(tipo_visita IN ($TIPOS_VISITA)),
@@ -135,7 +145,8 @@ class InduztekDbHelper private constructor(context: Context) :
                 fecha_hora_cierre INTEGER,
                 latitud_cierre REAL,
                 longitud_cierre REAL,
-                id_usuario_cierra INTEGER REFERENCES usuario(id_usuario))""",
+                id_usuario_cierra INTEGER REFERENCES usuario(id_usuario),
+                sincronizado INTEGER NOT NULL DEFAULT 0)""",
             """CREATE TABLE visita_participante (
                 id_visita INTEGER NOT NULL REFERENCES visita(id_visita) ON DELETE CASCADE,
                 id_usuario INTEGER NOT NULL REFERENCES usuario(id_usuario),
@@ -166,7 +177,7 @@ class InduztekDbHelper private constructor(context: Context) :
             """CREATE UNIQUE INDEX ux_protocolo_visita_equipo
                 ON protocolo(id_visita, id_equipo) WHERE id_protocolo_reemplazado IS NULL""",
             """CREATE TRIGGER tg_protocolo_formalizado_inmutable
-                BEFORE UPDATE ON protocolo
+                BEFORE UPDATE OF $COLUMNAS_PROTOCOLO ON protocolo
                 WHEN OLD.estado = 'FORMALIZADO'
                 BEGIN SELECT RAISE(ABORT, 'Un protocolo Formalizado no se puede modificar (RN-04)'); END""",
             """CREATE TABLE historial_estado (
@@ -205,6 +216,28 @@ class InduztekDbHelper private constructor(context: Context) :
                 WHEN (SELECT estado FROM protocolo WHERE id_protocolo = OLD.id_protocolo) = 'FORMALIZADO'
                 BEGIN SELECT RAISE(ABORT, 'Protocolo formalizado: no se eliminan pruebas'); END""",
 
+            """CREATE TRIGGER tg_protocolo_sucio AFTER UPDATE OF $COLUMNAS_PROTOCOLO ON protocolo
+                BEGIN UPDATE protocolo SET sincronizado = 0 WHERE id_protocolo = NEW.id_protocolo; END""",
+            """CREATE TRIGGER tg_prueba_sucia_ins AFTER INSERT ON prueba
+                BEGIN UPDATE protocolo SET sincronizado = 0 WHERE id_protocolo = NEW.id_protocolo; END""",
+            """CREATE TRIGGER tg_prueba_sucia_upd AFTER UPDATE ON prueba
+                BEGIN UPDATE protocolo SET sincronizado = 0 WHERE id_protocolo = NEW.id_protocolo; END""",
+            """CREATE TRIGGER tg_prueba_sucia_del AFTER DELETE ON prueba
+                BEGIN UPDATE protocolo SET sincronizado = 0 WHERE id_protocolo = OLD.id_protocolo; END""",
+            """CREATE TRIGGER tg_medicion_sucia_ins AFTER INSERT ON medicion
+                BEGIN UPDATE protocolo SET sincronizado = 0
+                WHERE id_protocolo = (SELECT id_protocolo FROM prueba WHERE id_prueba = NEW.id_prueba); END""",
+            """CREATE TRIGGER tg_historial_sucio AFTER INSERT ON historial_estado
+                BEGIN UPDATE protocolo SET sincronizado = 0 WHERE id_protocolo = NEW.id_protocolo; END""",
+            """CREATE TRIGGER tg_visita_sucia AFTER UPDATE OF $COLUMNAS_VISITA ON visita
+                BEGIN UPDATE visita SET sincronizado = 0 WHERE id_visita = NEW.id_visita; END""",
+            """CREATE TRIGGER tg_participante_sucio_ins AFTER INSERT ON visita_participante
+                BEGIN UPDATE visita SET sincronizado = 0 WHERE id_visita = NEW.id_visita; END""",
+            """CREATE TRIGGER tg_participante_sucio_del AFTER DELETE ON visita_participante
+                BEGIN UPDATE visita SET sincronizado = 0 WHERE id_visita = OLD.id_visita; END""",
+            """CREATE TRIGGER tg_recepcion_sucia AFTER INSERT ON recepcion_acta
+                BEGIN UPDATE visita SET sincronizado = 0 WHERE id_visita = NEW.id_visita; END""",
+
             "CREATE INDEX ix_protocolo_equipo ON protocolo(id_equipo, fecha_hora_prueba)",
             "CREATE INDEX ix_protocolo_estado ON protocolo(estado)",
             "CREATE INDEX ix_equipo_serie ON equipo(numero_serie)",
@@ -235,10 +268,11 @@ class InduztekDbHelper private constructor(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TRIGGER IF EXISTS tg_protocolo_formalizado_inmutable")
-        db.execSQL("DROP TRIGGER IF EXISTS tg_prueba_formalizada_ins")
-        db.execSQL("DROP TRIGGER IF EXISTS tg_prueba_formalizada_del")
-        db.execSQL("DROP TRIGGER IF EXISTS tg_usuario_cliente_con_empresa")
+        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'trigger'", null).use { c ->
+            val nombres = mutableListOf<String>()
+            while (c.moveToNext()) nombres += c.getString(0)
+            nombres.forEach { db.execSQL("DROP TRIGGER IF EXISTS $it") }
+        }
         TABLAS_EN_ORDEN_INVERSO.forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
         onCreate(db)
     }

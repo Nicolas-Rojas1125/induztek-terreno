@@ -1,22 +1,35 @@
 package cl.duocuc.induztek.data.repository
 
 import android.database.Cursor
+import android.database.sqlite.SQLiteException
+import cl.duocuc.induztek.data.local.EspejoLocal
 import cl.duocuc.induztek.data.local.InduztekDbHelper
 import cl.duocuc.induztek.data.local.booleano
 import cl.duocuc.induztek.data.local.consultar
-import cl.duocuc.induztek.data.local.contar
 import cl.duocuc.induztek.data.local.largo
 import cl.duocuc.induztek.data.local.largoONulo
 import cl.duocuc.induztek.data.local.texto
-import cl.duocuc.induztek.data.local.valores
+import cl.duocuc.induztek.data.remote.NuevaCuenta
+import cl.duocuc.induztek.data.remote.UsuariosRemoto
+import cl.duocuc.induztek.domain.model.Cliente
 import cl.duocuc.induztek.domain.model.Operacion
+import cl.duocuc.induztek.domain.model.Pagina
+import cl.duocuc.induztek.domain.model.Permiso
+import cl.duocuc.induztek.domain.model.ReglasCuentas
 import cl.duocuc.induztek.domain.model.RolCodigo
+import cl.duocuc.induztek.domain.model.Sesion
 import cl.duocuc.induztek.domain.model.Usuario
-import cl.duocuc.induztek.domain.validacion.HashContrasena
-import cl.duocuc.induztek.domain.validacion.ValidadorRut
+import cl.duocuc.induztek.domain.util.Paginador
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 
-class UsuarioRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) :
-    RepositorioBase(helper, cambios) {
+class UsuarioRepositorio(
+    helper: InduztekDbHelper,
+    cambios: NotificadorCambios,
+    private val remoto: UsuariosRemoto,
+    override val sesion: StateFlow<Sesion?>
+) : RepositorioBase(helper, cambios), UsuariosFuente {
     private val sqlBase = """
         SELECT u.id_usuario, u.rut, u.nombre, u.correo, u.telefono, u.cargo, u.activo, u.id_cliente,
                r.codigo AS rol, COALESCE(c.razon_social, '') AS razon_social
@@ -38,53 +51,75 @@ class UsuarioRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) 
         nombreCliente = c.texto("razon_social")
     )
 
-    suspend fun listar(texto: String = "", rol: RolCodigo? = null): List<Usuario> = leer {
-        val args = mutableListOf<Any?>()
-        var sql = sqlBase
-        if (rol != null) { sql += " AND r.codigo = ? "; args += rol.name }
-        if (texto.isNotBlank()) {
-            sql += " AND (u.nombre LIKE ? OR u.correo LIKE ? OR u.rut LIKE ?) "
-            repeat(3) { args += "%${texto.trim()}%" }
-        }
-        consultar("$sql ORDER BY u.activo DESC, r.id_rol, u.nombre", args) { leerUsuario(it) }
-    }
-
     suspend fun activosPorRol(vararg roles: RolCodigo): List<Usuario> = leer {
         val lista = roles.joinToString(",") { "'${it.name}'" }
         consultar("$sqlBase AND u.activo = 1 AND r.codigo IN ($lista) ORDER BY u.nombre") { leerUsuario(it) }
     }
 
-    suspend fun existeRut(rut: String): Boolean = leer {
-        contar("SELECT COUNT(*) FROM usuario WHERE rut = ?", listOf(ValidadorRut.formatear(rut))) > 0
+    override suspend fun listar(buscar: String, rol: RolCodigo?, activo: Boolean?, pagina: Int): Operacion<Pagina<Usuario>> =
+        remoto.listar(buscar, rol, activo, pagina, Paginador.TAMANO)
+
+    override suspend fun obtener(id: Long): Operacion<Usuario> = remoto.obtener(id)
+
+    override suspend fun crear(cuenta: NuevaCuenta): Operacion<Usuario> {
+        val s = sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        if (!s.rol.puedeCrear(cuenta.rol)) return Operacion.Fallo(ReglasCuentas.mensajeNoPuedeCrear(s.rol))
+        val r = remoto.crear(s.idUsuario, cuenta)
+        if (r is Operacion.Exito) reflejar(r.valor)
+        return r
     }
 
-    suspend fun existeCorreo(correo: String): Boolean = leer {
-        contar("SELECT COUNT(*) FROM usuario WHERE correo = ? COLLATE NOCASE", listOf(correo.trim())) > 0
+    override suspend fun editar(id: Long, nombre: String, correo: String, telefono: String, cargo: String): Operacion<Usuario> {
+        val s = sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        val r = remoto.actualizar(s.idUsuario, id, nombre, correo, telefono, cargo)
+        if (r is Operacion.Exito) reflejar(r.valor)
+        return r
     }
 
-    suspend fun crear(u: Usuario, contrasena: String): Operacion<Long> =
-        escribir("Ya existe un usuario con ese RUT o correo") {
-            val sal = HashContrasena.nuevaSal()
-            val idRol = (u.rol.ordinal + 1).toLong()
-            val id = insertOrThrow(
-                "usuario", null, valores(
-                    "id_rol" to idRol,
-                    "id_cliente" to (if (u.rol == RolCodigo.CLIENTE) u.idCliente else null),
-                    "rut" to ValidadorRut.formatear(u.rut),
-                    "nombre" to u.nombre.trim(),
-                    "correo" to u.correo.trim().lowercase(),
-                    "telefono" to u.telefono.trim(),
-                    "cargo" to u.cargo.trim(),
-                    "password_hash" to HashContrasena.hash(contrasena, sal),
-                    "sal" to sal,
-                    "activo" to true
-                )
-            )
-            Operacion.Exito(id)
+    override suspend fun cambiarEstado(id: Long, activo: Boolean): Operacion<Usuario> {
+        val s = sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        val r = remoto.cambiarEstado(s.idUsuario, id, activo)
+        if (r is Operacion.Exito) reflejar(r.valor)
+        return r
+    }
+
+    override suspend fun eliminar(id: Long): Operacion<Unit> {
+        val s = sesion.value ?: return Operacion.Fallo("Sesión no iniciada")
+        if (!s.puede(Permiso.ELIMINAR_CUENTAS)) return Operacion.Fallo("Solo un administrador puede eliminar cuentas")
+        val r = remoto.eliminar(s.idUsuario, id)
+        if (r is Operacion.Exito) {
+            withContext(Dispatchers.IO) {
+                try {
+                    helper.writableDatabase.delete("usuario", "id_usuario = ?", arrayOf(id.toString()))
+                } catch (e: SQLiteException) {
+                    helper.writableDatabase.update(
+                        "usuario", cl.duocuc.induztek.data.local.valores("activo" to false), "id_usuario = ?", arrayOf(id.toString())
+                    )
+                }
+            }
+            cambios.notificar()
         }
+        return r
+    }
 
-    suspend fun cambiarActivo(idUsuario: Long, activo: Boolean): Operacion<Unit> = escribir {
-        update("usuario", valores("activo" to activo), "id_usuario = ?", arrayOf(idUsuario.toString()))
-        Operacion.Exito(Unit)
+    override suspend fun empresas(): List<Cliente> = leer {
+        consultar("SELECT * FROM cliente ORDER BY razon_social") {
+            Cliente(
+                id = it.largo("id_cliente"), rut = it.texto("rut"), razonSocial = it.texto("razon_social"),
+                giro = it.texto("giro"), contactoNombre = it.texto("contacto_nombre"),
+                telefono = it.texto("telefono"), correo = it.texto("correo")
+            )
+        }
+    }
+
+    private suspend fun reflejar(u: Usuario) {
+        withContext(Dispatchers.IO) {
+            try {
+                EspejoLocal.usuario(helper.writableDatabase, u)
+            } catch (e: SQLiteException) {
+                Unit
+            }
+        }
+        cambios.notificar()
     }
 }

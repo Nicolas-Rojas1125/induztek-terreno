@@ -143,7 +143,7 @@ class ReglasNegocioTest {
 
     @Test
     fun rn04_formalizadoNoSePuedeAnular() {
-        val jefe = sesion(RolCodigo.JEFE_TECNICO)
+        val jefe = sesion(RolCodigo.ADMINISTRADOR)
         assertFalse(AccionProtocolo.ANULAR in MaquinaEstados.accionesDisponibles(EstadoProtocolo.FORMALIZADO, jefe, 1))
         assertTrue(AccionProtocolo.ANULAR in MaquinaEstados.accionesDisponibles(EstadoProtocolo.BORRADOR, jefe, 1))
     }
@@ -161,8 +161,8 @@ class ReglasNegocioTest {
     @Test
     fun matrizPermisos_comoEnAnexo7() {
         assertTrue(Permiso.CERRAR_VISITA in MatrizPermisos.permisosDe(RolCodigo.TECNICO))
-        assertFalse(Permiso.CERRAR_VISITA in MatrizPermisos.permisosDe(RolCodigo.JEFE_TECNICO))
-        assertTrue(Permiso.GESTIONAR_INSTRUMENTOS in MatrizPermisos.permisosDe(RolCodigo.JEFE_TECNICO))
+        assertFalse(Permiso.CERRAR_VISITA in MatrizPermisos.permisosDe(RolCodigo.ADMINISTRADOR))
+        assertTrue(Permiso.GESTIONAR_INSTRUMENTOS in MatrizPermisos.permisosDe(RolCodigo.ADMINISTRADOR))
         assertFalse(Permiso.GESTIONAR_INSTRUMENTOS in MatrizPermisos.permisosDe(RolCodigo.INGENIERO))
         assertEquals(setOf(Permiso.CONSULTAR_PROPIA_EMPRESA), MatrizPermisos.permisosDe(RolCodigo.CLIENTE))
     }

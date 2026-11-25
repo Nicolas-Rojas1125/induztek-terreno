@@ -53,4 +53,18 @@ object Formato {
 
     fun coordenadas(lat: Double, lon: Double): String =
         String.format(Locale.US, "%.5f, %.5f", lat, lon)
+
+    fun sinTildes(texto: String): String = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+
+    fun hace(millis: Long?, ahora: Long = ahora()): String {
+        if (millis == null) return "Nunca"
+        val minutos = (ahora - millis) / 60_000
+        return when {
+            minutos < 1 -> "Hace un momento"
+            minutos < 60 -> "Hace $minutos min"
+            minutos < 24 * 60 -> "Hace ${minutos / 60} h"
+            else -> fechaHora(millis)
+        }
+    }
 }

@@ -26,7 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -44,6 +47,7 @@ import cl.duocuc.induztek.domain.reglas.VisibilidadCliente
 import cl.duocuc.induztek.domain.util.Formato
 import cl.duocuc.induztek.ui.components.AparicionEscalonada
 import cl.duocuc.induztek.ui.components.AvisoInformativo
+import cl.duocuc.induztek.ui.components.BarraBusqueda
 import cl.duocuc.induztek.ui.components.BotonPrincipal
 import cl.duocuc.induztek.ui.components.BotonSecundario
 import cl.duocuc.induztek.ui.components.CampoSeleccion
@@ -51,14 +55,20 @@ import cl.duocuc.induztek.ui.components.CampoTexto
 import cl.duocuc.induztek.ui.components.Cargando
 import cl.duocuc.induztek.ui.components.ChipEstado
 import cl.duocuc.induztek.ui.components.ChipResultado
+import cl.duocuc.induztek.ui.components.ControlPaginacion
+import cl.duocuc.induztek.ui.components.DetalleFichaTecnica
+import cl.duocuc.induztek.ui.components.DialogoConfirmacion
 import cl.duocuc.induztek.ui.components.EstadoVacio
 import cl.duocuc.induztek.ui.components.FilaDato
+import cl.duocuc.induztek.ui.components.FiltrosChips
+import cl.duocuc.induztek.ui.components.FormularioFichaTecnica
 import cl.duocuc.induztek.ui.components.FotoPlaca
 import cl.duocuc.induztek.ui.components.GraficoTendencia
 import cl.duocuc.induztek.ui.components.MostrarMensaje
 import cl.duocuc.induztek.ui.components.PantallaBase
 import cl.duocuc.induztek.ui.components.TarjetaLista
 import cl.duocuc.induztek.ui.components.TarjetaSeccion
+import cl.duocuc.induztek.ui.components.TituloSeccion
 import cl.duocuc.induztek.ui.components.rememberCapturaFoto
 import cl.duocuc.induztek.ui.components.rememberSacudida
 import cl.duocuc.induztek.ui.components.sacudir
@@ -78,7 +88,7 @@ fun EquiposScreen(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     PantallaBase(
         titulo = if (ui.esCliente) "Equipos de mi empresa" else "Equipos",
-        subtitulo = "${ui.equipos.size} resultado(s)",
+        subtitulo = "${ui.pagina.totalElementos} resultado(s)",
         barraInferior = barraInferior
     ) { padding ->
         LazyColumn(
@@ -87,35 +97,28 @@ fun EquiposScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                CampoTexto(
-                    valor = ui.busqueda, onValorCambia = viewModel::onBuscar,
-                    etiqueta = "Buscar por TAG, Nº de serie o instalación", icono = R.drawable.ic_buscar,
+                BarraBusqueda(
+                    ui.busqueda, viewModel::onBuscar, "Buscar por TAG, Nº de serie, marca o instalación",
                     capitalizacion = KeyboardCapitalization.Characters
                 )
             }
+            item { FiltrosChips(Clasificacion.entries, ui.clasificacion, { it.etiqueta }, { viewModel.onClasificacion(it) }) }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Clasificacion.entries.forEach { cl ->
-                        FilterChip(
-                            selected = ui.clasificacion == cl,
-                            onClick = { viewModel.onClasificacion(cl) },
-                            label = { Text(cl.etiqueta) },
-                            leadingIcon = if (ui.clasificacion == cl) {
-                                { Icon(painterResource(R.drawable.ic_check), contentDescription = null, modifier = Modifier.size(18.dp)) }
-                            } else null
-                        )
-                    }
-                }
+                FiltrosChips(
+                    TipoEquipo.entries.filter { ui.clasificacion == null || it.clasificacion == ui.clasificacion },
+                    ui.tipo, { it.etiqueta }, { viewModel.onTipo(it) }
+                )
             }
+            if (ui.cargando && ui.equipos.isEmpty()) item { Cargando(Modifier.height(120.dp)) }
             if (!ui.cargando && ui.equipos.isEmpty()) {
-                item { EstadoVacio(R.drawable.ic_buscar, "Sin equipos", "No hay equipos que coincidan con la búsqueda.") }
+                item { EstadoVacio(R.drawable.ic_buscar, "Sin equipos", "No hay equipos que coincidan con la búsqueda o los filtros.") }
             }
             items(ui.equipos, key = { it.id }) { e ->
                 AparicionEscalonada(ui.equipos.indexOf(e), Modifier.animateItem()) {
                     TarjetaLista(
                         titulo = "${e.tag} · ${e.tipo.etiqueta}",
                         subtitulo = "${e.nombreInstalacion} · ${e.nombreCliente}",
-                        detalle = "Nº ${e.numeroSerie} · " +
+                        detalle = "${e.marca} · Nº ${e.numeroSerie} · " +
                             (e.ultimaPrueba?.let { "Última prueba ${Formato.fechaDesdeMillis(it)}" } ?: "Sin pruebas"),
                         icono = R.drawable.ic_rayo,
                         colorIcono = if (e.tipo.clasificacion == Clasificacion.SECUNDARIO) AmbarObservado else MaterialTheme.colorScheme.primary,
@@ -123,6 +126,7 @@ fun EquiposScreen(
                     )
                 }
             }
+            item { ControlPaginacion(ui.pagina, viewModel::irAPagina) }
         }
     }
 }
@@ -143,7 +147,7 @@ fun EquipoFormScreen(
     val tomarFoto = rememberCapturaFoto(onFoto = viewModel::onFotoTomada, onAviso = viewModel::onAvisoCamara)
     val t = ui.tipo
 
-    PantallaBase(titulo = "Registrar equipo", subtitulo = ui.instalacion?.let { "${it.nombre} · ${it.nombreCliente}" }, onVolver = onVolver, snackbar = snackbar) { padding ->
+    PantallaBase(titulo = if (ui.editando) "Editar equipo" else "Registrar equipo", subtitulo = ui.instalacion?.let { "${it.nombre} · ${it.nombreCliente}" }, onVolver = onVolver, snackbar = snackbar) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -217,6 +221,12 @@ fun EquipoFormScreen(
                     error = ui.observaciones.errorVisible, lineas = 2)
             }
 
+            if (t != null) {
+                TarjetaSeccion("Ficha técnica", icono = R.drawable.ic_ficha) {
+                    FormularioFichaTecnica(t, ui.ficha, ui::errorFicha, ui.completitudFicha, viewModel::onDatoTecnico)
+                }
+            }
+
             TarjetaSeccion("Foto de la placa (cámara)", icono = R.drawable.ic_camara) {
                 Text(
                     "Evita errores al copiar la placa a mano (PB-03): el ingeniero puede verificar los datos en oficina.",
@@ -233,7 +243,7 @@ fun EquipoFormScreen(
                     }
                 }
             }
-            BotonPrincipal("Guardar equipo", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
+            BotonPrincipal(if (ui.editando) "Guardar cambios" else "Guardar equipo", viewModel::guardar, Modifier.fillMaxWidth(), icono = R.drawable.ic_check, cargando = ui.guardando)
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -243,15 +253,25 @@ fun EquipoFormScreen(
 fun EquipoDetalleScreen(
     onVolver: () -> Unit,
     onProtocolo: (Long) -> Unit,
+    onEditar: (Long) -> Unit,
     viewModel: EquipoDetalleViewModel = viewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val mensaje by viewModel.mensaje.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     MostrarMensaje(mensaje, snackbar, viewModel::onMensajeMostrado)
+    LaunchedEffect(ui.eliminado) { if (ui.eliminado) onVolver() }
+    var confirmar by rememberSaveable { mutableStateOf(false) }
     val tomarFoto = rememberCapturaFoto(onFoto = viewModel::onFotoTomada, onAviso = viewModel::onAvisoCamara)
     val e = ui.equipo
     val s = ui.sesion
+    if (confirmar && e != null) {
+        DialogoConfirmacion(
+            "¿Eliminar equipo?",
+            "Se eliminará ${e.tag}. Solo es posible si no tiene protocolos registrados.",
+            "Eliminar", { confirmar = false; viewModel.eliminar() }, { confirmar = false }, peligroso = true
+        )
+    }
 
     PantallaBase(
         titulo = e?.let { "${it.tag} · ${it.tipo.etiqueta}" } ?: "Equipo",
@@ -261,6 +281,12 @@ fun EquipoDetalleScreen(
         acciones = {
             if (s != null && !s.esCliente && e != null) {
                 IconButton(onClick = tomarFoto) { Icon(painterResource(R.drawable.ic_camara), contentDescription = "Foto de la placa") }
+            }
+            if (e != null && ui.puedeEditar) {
+                IconButton(onClick = { onEditar(e.id) }) { Icon(painterResource(R.drawable.ic_editar), contentDescription = "Editar") }
+            }
+            if (e != null && ui.puedeEliminar) {
+                IconButton(onClick = { confirmar = true }) { Icon(painterResource(R.drawable.ic_eliminar), contentDescription = "Eliminar") }
             }
         }
     ) { padding ->
@@ -277,10 +303,13 @@ fun EquipoDetalleScreen(
             item {
                 TarjetaSeccion("Placa de características", icono = R.drawable.ic_documento) {
                     e.fotoPlaca?.let { FotoPlaca(it) }
+                    FilaDato("Cliente", e.nombreCliente, icono = R.drawable.ic_empresa)
+                    FilaDato("Instalación", e.nombreInstalacion, icono = R.drawable.ic_ubicacion)
                     FilaDato("Clasificación", e.tipo.clasificacion.etiqueta)
+                    FilaDato("Pruebas aplicables", e.tipo.pruebas.joinToString { it.etiqueta })
                     FilaDato("Marca / modelo", "${e.marca} ${e.modelo}".trim())
                     FilaDato("Nº de serie", e.numeroSerie)
-                    FilaDato("Año", e.anioFabricacion?.toString() ?: "")
+                    FilaDato("Año", e.anioFabricacion?.toString() ?: "—")
                     e.potenciaKva?.let { FilaDato("Potencia", "${Formato.numeroCompacto(it)} kVA") }
                     e.tensionPrimariaKv?.let { p ->
                         FilaDato("Tensiones", "${Formato.numeroCompacto(p)}" + (e.tensionSecundariaKv?.let { " / ${Formato.numeroCompacto(it)}" } ?: "") + " kV")
@@ -289,6 +318,12 @@ fun EquipoDetalleScreen(
                     e.maxContactosUohm?.let { FilaDato("Máx. contactos", "${Formato.numeroCompacto(it)} µΩ") }
                     if (e.observaciones.isNotBlank()) FilaDato("Observaciones", e.observaciones)
                     FilaDato("Última prueba", e.ultimaPrueba?.let { Formato.fechaDesdeMillis(it) } ?: "Sin pruebas")
+                }
+            }
+
+            item {
+                TarjetaSeccion("Ficha técnica", icono = R.drawable.ic_ficha) {
+                    DetalleFichaTecnica(e.tipo, e.datosTecnicos)
                 }
             }
 
@@ -346,7 +381,7 @@ fun EquipoDetalleScreen(
                 }
             }
 
-            item { Text("Historial de protocolos (${ui.historial.size})", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 6.dp)) }
+            item { TituloSeccion("Historial de protocolos (${ui.historial.size})", Modifier.padding(top = 6.dp)) }
             if (ui.historial.isEmpty()) {
                 item { EstadoVacio(R.drawable.ic_historial, "Sin protocolos", "Este equipo aún no tiene pruebas registradas (sin historial previo).") }
             }

@@ -69,7 +69,6 @@ import cl.duocuc.induztek.ui.components.rememberSacudida
 import cl.duocuc.induztek.ui.components.sacudir
 import cl.duocuc.induztek.ui.theme.Dimens
 import cl.duocuc.induztek.ui.theme.RojoRechazado
-import cl.duocuc.induztek.ui.theme.RojoRechazadoFondo
 import cl.duocuc.induztek.viewmodel.PruebaFormViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -276,7 +275,7 @@ fun PruebaFormScreen(onVolver: () -> Unit, viewModel: PruebaFormViewModel = view
                         }
                     }
                     AnimatedVisibility(visible = ui.hayVariacionSignificativa) {
-                        Card(colors = CardDefaults.cardColors(containerColor = RojoRechazadoFondo), modifier = Modifier.fillMaxWidth()) {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 "Variación significativa (> 25 %): quedará destacada y el ingeniero deberá comentarla (RN-09).",
                                 color = RojoRechazado, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp)

@@ -5,6 +5,9 @@ import androidx.lifecycle.SavedStateHandle
 import cl.duocuc.induztek.data.repository.PuntoSerie
 import cl.duocuc.induztek.domain.model.Clasificacion
 import cl.duocuc.induztek.domain.model.Equipo
+import cl.duocuc.induztek.domain.model.FichaTecnica
+import cl.duocuc.induztek.domain.model.Pagina
+import cl.duocuc.induztek.domain.model.TipoCampoTecnico
 import cl.duocuc.induztek.domain.model.Instalacion
 import cl.duocuc.induztek.domain.model.Operacion
 import cl.duocuc.induztek.domain.model.Parametro
@@ -24,11 +27,14 @@ import kotlinx.coroutines.flow.update
 
 data class EquiposUiState(
     val cargando: Boolean = true,
-    val equipos: List<Equipo> = emptyList(),
+    val pagina: Pagina<Equipo> = Pagina.vacia(),
     val busqueda: String = "",
     val clasificacion: Clasificacion? = null,
+    val tipo: TipoEquipo? = null,
     val esCliente: Boolean = false
-)
+) {
+    val equipos: List<Equipo> get() = pagina.items
+}
 
 class EquiposViewModel(application: Application) : BaseViewModel(application) {
     private val _ui = MutableStateFlow(EquiposUiState())
@@ -36,30 +42,33 @@ class EquiposViewModel(application: Application) : BaseViewModel(application) {
 
     init { observarCambios { cargar() } }
 
-    private suspend fun cargar() {
+    private suspend fun cargar(pagina: Int = _ui.value.pagina.pagina) {
         val s = sesion ?: return
         val u = _ui.value
-        _ui.update {
-            it.copy(
-                cargando = false,
-                esCliente = s.esCliente,
-                equipos = c.equipos.buscar(s, u.busqueda, clasificacion = u.clasificacion)
-            )
-        }
+        val resultado = c.equipos.pagina(s, u.busqueda, u.clasificacion, u.tipo, pagina)
+        _ui.update { it.copy(cargando = false, esCliente = s.esCliente, pagina = resultado) }
     }
 
     fun onBuscar(texto: String) {
         _ui.update { it.copy(busqueda = texto) }
-        lanzar { cargar() }
+        lanzar { cargar(0) }
     }
 
     fun onClasificacion(cl: Clasificacion?) {
-        _ui.update { it.copy(clasificacion = if (it.clasificacion == cl) null else cl) }
-        lanzar { cargar() }
+        _ui.update { it.copy(clasificacion = if (it.clasificacion == cl) null else cl, tipo = null) }
+        lanzar { cargar(0) }
     }
+
+    fun onTipo(t: TipoEquipo?) {
+        _ui.update { it.copy(tipo = if (it.tipo == t) null else t) }
+        lanzar { cargar(0) }
+    }
+
+    fun irAPagina(pagina: Int) = lanzar { cargar(pagina) }
 }
 
 data class EquipoFormUiState(
+    val editando: Boolean = false,
     val instalacion: Instalacion? = null,
     val tag: Campo = Campo(),
     val tipo: TipoEquipo? = null,
@@ -74,16 +83,23 @@ data class EquipoFormUiState(
     val corriente: Campo = Campo(),
     val maxContactos: Campo = Campo(),
     val observaciones: Campo = Campo(),
+    val ficha: Map<String, String> = emptyMap(),
+    val erroresFicha: Map<String, String> = emptyMap(),
+    val fichaTocada: Set<String> = emptySet(),
     val fotoPlaca: String? = null,
     val duplicado: Equipo? = null,
     val guardando: Boolean = false,
     val intentosFallidos: Int = 0,
     val guardadoId: Long? = null
-)
+) {
+    fun errorFicha(clave: String): String? = if (clave in fichaTocada) erroresFicha[clave] else null
+    val completitudFicha: Int get() = tipo?.let { FichaTecnica.completitud(it, ficha) } ?: 0
+}
 
 class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : BaseViewModel(application) {
-    private val idInstalacion: Long = estado.get<Long>("instalacionId") ?: 0L
-    private val _ui = MutableStateFlow(EquipoFormUiState())
+    private val idEquipo: Long? = estado.get<Long>("id")
+    private var idInstalacion: Long = estado.get<Long>("instalacionId") ?: 0L
+    private val _ui = MutableStateFlow(EquipoFormUiState(editando = idEquipo != null))
     val ui: StateFlow<EquipoFormUiState> = _ui.asStateFlow()
 
     private val vMarca: (String) -> String? = { Validadores.texto(it, "La marca", 2, 60) }
@@ -99,7 +115,32 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
     init {
         lanzar {
             val s = sesion ?: return@lanzar
-            _ui.update { it.copy(instalacion = c.clientes.obtenerInstalacion(idInstalacion, s)) }
+            val existente = idEquipo?.let { c.equipos.obtener(it, s) }
+            if (existente != null) idInstalacion = existente.idInstalacion
+            val instalacion = c.clientes.obtenerInstalacion(idInstalacion, s)
+            _ui.update { u ->
+                if (existente == null) u.copy(instalacion = instalacion)
+                else {
+                    val n: (Double?) -> Campo = { d -> Campo(d?.let { Formato.numeroEditable(it) } ?: "", null, true) }
+                    u.copy(
+                        instalacion = instalacion,
+                        tag = Campo(existente.tag, null, true), tipo = existente.tipo,
+                        marca = Campo(existente.marca, null, true), modelo = Campo(existente.modelo, null, true),
+                        serie = Campo(existente.numeroSerie, null, true),
+                        anio = Campo(existente.anioFabricacion?.toString() ?: "", null, true),
+                        potencia = n(existente.potenciaKva), tensionPrimaria = n(existente.tensionPrimariaKv),
+                        tensionSecundaria = n(existente.tensionSecundariaKv), corriente = n(existente.corrienteNominalA),
+                        maxContactos = n(existente.maxContactosUohm),
+                        observaciones = Campo(existente.observaciones, null, true),
+                        ficha = existente.datosTecnicos.mapValues { (k, v) ->
+                            val campo = FichaTecnica.campo(existente.tipo, k)
+                            if (campo != null && (campo.tipo == TipoCampoTecnico.NUMERO || campo.tipo == TipoCampoTecnico.ENTERO)) v.replace('.', ',') else v
+                        },
+                        erroresFicha = FichaTecnica.validarTodo(existente.tipo, existente.datosTecnicos),
+                        fotoPlaca = existente.fotoPlaca
+                    )
+                }
+            }
         }
     }
 
@@ -111,13 +152,17 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
         val tag = _ui.value.tag.valor
         if (Validadores.tag(tag) != null) return
         lanzar {
-            val existente = c.equipos.buscarPorTag(idInstalacion, tag)
+            val existente = c.equipos.buscarPorTag(idInstalacion, tag)?.takeIf { it.id != idEquipo }
             _ui.update { it.copy(duplicado = existente) }
             if (existente != null) vibrar(TipoVibracion.ADVERTENCIA)
         }
     }
 
-    fun onTipo(t: TipoEquipo) = _ui.update { it.copy(tipo = t, errorTipo = null) }
+    fun onTipo(t: TipoEquipo) = _ui.update {
+        val claves = FichaTecnica.campos(t).map { c -> c.clave }.toSet()
+        val ficha = it.ficha.filterKeys { k -> k in claves }
+        it.copy(tipo = t, errorTipo = null, ficha = ficha, erroresFicha = FichaTecnica.validarTodo(t, ficha), fichaTocada = emptySet())
+    }
     fun onMarca(v: String) = _ui.update { it.copy(marca = it.marca.cambiar(v, vMarca)) }
     fun onModelo(v: String) = _ui.update { it.copy(modelo = it.modelo.cambiar(v, vModelo)) }
     fun onSerie(v: String) = _ui.update { it.copy(serie = it.serie.cambiar(v, Validadores::numeroSerie)) }
@@ -128,6 +173,12 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
     fun onCorriente(v: String) = _ui.update { it.copy(corriente = it.corriente.cambiar(v, vCorriente)) }
     fun onMaxContactos(v: String) = _ui.update { it.copy(maxContactos = it.maxContactos.cambiar(v, vMaxContactos)) }
     fun onObservaciones(v: String) = _ui.update { it.copy(observaciones = it.observaciones.cambiar(v, vObs)) }
+
+    fun onDatoTecnico(clave: String, valor: String) = _ui.update { u ->
+        val t = u.tipo ?: return@update u
+        val ficha = u.ficha + (clave to valor)
+        u.copy(ficha = ficha, erroresFicha = FichaTecnica.validarTodo(t, ficha), fichaTocada = u.fichaTocada + clave)
+    }
 
     fun onFotoTomada(ruta: String) {
         ArchivosFoto.eliminar(_ui.value.fotoPlaca)
@@ -147,6 +198,7 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
         val s = sesion ?: return
         if (!s.puede(Permiso.GESTIONAR_CLIENTES_EQUIPOS)) { mostrar("No tiene permiso para registrar equipos"); return }
         val u = _ui.value
+        if (u.guardando) return
         val t = u.tipo
         var v = u.copy(
             tag = u.tag.validar(Validadores::tag),
@@ -163,6 +215,10 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
             if (t.usaTensionSecundaria) v = v.copy(tensionSecundaria = u.tensionSecundaria.validar(vTension2))
             if (t.usaCorriente) v = v.copy(corriente = u.corriente.validar(vCorriente))
             if (t.usaMaxContactos) v = v.copy(maxContactos = u.maxContactos.validar(vMaxContactos))
+            v = v.copy(
+                erroresFicha = FichaTecnica.validarTodo(t, u.ficha),
+                fichaTocada = FichaTecnica.campos(t).map { it.clave }.toSet()
+            )
         }
         val errores = listOfNotNull(
             v.tag.error, v.errorTipo, v.marca.error, v.modelo.error, v.serie.error, v.anio.error, v.observaciones.error,
@@ -171,23 +227,26 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
             if (t?.usaTensionSecundaria == true) v.tensionSecundaria.error else null,
             if (t?.usaCorriente == true) v.corriente.error else null,
             if (t?.usaMaxContactos == true) v.maxContactos.error else null
-        )
+        ) + v.erroresFicha.values
         if (errores.isNotEmpty() || t == null) {
             _ui.value = v.copy(intentosFallidos = u.intentosFallidos + 1)
             vibrar(TipoVibracion.ERROR)
+            if (v.erroresFicha.isNotEmpty()) mostrar("Revise la ficha técnica: ${v.erroresFicha.size} dato(s) con error")
             return
         }
         _ui.value = v.copy(guardando = true)
         lanzar {
-            val existente = c.equipos.buscarPorTag(idInstalacion, v.tag.valor)
+            val existente = c.equipos.buscarPorTag(idInstalacion, v.tag.valor)?.takeIf { it.id != idEquipo }
             if (existente != null) {
                 _ui.update { it.copy(guardando = false, duplicado = existente, intentosFallidos = it.intentosFallidos + 1) }
                 vibrar(TipoVibracion.ERROR)
                 return@lanzar
             }
             val d = Validadores::aDecimal
-            val r = c.equipos.crear(
+            val r = c.equipos.guardar(
+                s.idUsuario,
                 Equipo(
+                    id = idEquipo ?: 0L,
                     idInstalacion = idInstalacion, tag = v.tag.valor, tipo = t, marca = v.marca.valor, modelo = v.modelo.valor,
                     numeroSerie = v.serie.valor, anioFabricacion = v.anio.valor.toIntOrNull(),
                     potenciaKva = if (t.usaPotencia) d(v.potencia.valor) else null,
@@ -195,9 +254,10 @@ class EquipoFormViewModel(application: Application, estado: SavedStateHandle) : 
                     tensionSecundariaKv = if (t.usaTensionSecundaria) d(v.tensionSecundaria.valor) else null,
                     corrienteNominalA = if (t.usaCorriente) d(v.corriente.valor) else null,
                     maxContactosUohm = if (t.usaMaxContactos) d(v.maxContactos.valor) else null,
-                    observaciones = v.observaciones.valor, fotoPlaca = v.fotoPlaca
-                ),
-                s.idUsuario
+                    observaciones = v.observaciones.valor,
+                    datosTecnicos = FichaTecnica.normalizar(t, v.ficha),
+                    fotoPlaca = v.fotoPlaca
+                )
             )
             when (r) {
                 is Operacion.Exito -> { vibrar(TipoVibracion.EXITO); _ui.update { it.copy(guardando = false, guardadoId = r.valor) } }
@@ -216,7 +276,10 @@ data class EquipoDetalleUiState(
     val historial: List<ProtocoloResumen> = emptyList(),
     val series: List<Pair<TipoPrueba, String>> = emptyList(),
     val serie: SerieSeleccionada? = null,
-    val puntos: List<PuntoSerie> = emptyList()
+    val puntos: List<PuntoSerie> = emptyList(),
+    val puedeEditar: Boolean = false,
+    val puedeEliminar: Boolean = false,
+    val eliminado: Boolean = false
 )
 
 class EquipoDetalleViewModel(application: Application, estado: SavedStateHandle) : BaseViewModel(application) {
@@ -240,7 +303,9 @@ class EquipoDetalleViewModel(application: Application, estado: SavedStateHandle)
             historial = if (equipo != null) c.protocolos.historialEquipo(idEquipo, s) else emptyList(),
             series = series,
             serie = serie,
-            puntos = serie?.let { c.protocolos.serieHistorica(idEquipo, it.tipo, it.elemento, it.parametro, s) }.orEmpty()
+            puntos = serie?.let { c.protocolos.serieHistorica(idEquipo, it.tipo, it.elemento, it.parametro, s) }.orEmpty(),
+            puedeEditar = s.puede(Permiso.GESTIONAR_CLIENTES_EQUIPOS),
+            puedeEliminar = s.puede(Permiso.ELIMINAR_REGISTROS)
         )
     }
 
@@ -261,6 +326,15 @@ class EquipoDetalleViewModel(application: Application, estado: SavedStateHandle)
     }
 
     fun onAvisoCamara(texto: String) = mostrar(texto)
+
+    fun eliminar() {
+        lanzar {
+            when (val r = c.equipos.eliminar(idEquipo)) {
+                is Operacion.Exito -> { vibrar(TipoVibracion.EXITO); _ui.update { it.copy(eliminado = true) } }
+                is Operacion.Fallo -> { vibrar(TipoVibracion.ERROR); mostrar(r.mensaje) }
+            }
+        }
+    }
 
     fun fechaCorta(millis: Long): String = Formato.fechaDesdeMillis(millis)
 }

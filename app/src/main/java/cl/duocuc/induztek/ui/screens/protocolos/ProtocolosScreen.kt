@@ -28,12 +28,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.duocuc.induztek.R
 import cl.duocuc.induztek.domain.model.EstadoProtocolo
+import cl.duocuc.induztek.domain.model.Resultado
 import cl.duocuc.induztek.domain.reglas.Plazos
 import cl.duocuc.induztek.domain.reglas.VisibilidadCliente
 import cl.duocuc.induztek.domain.util.Formato
 import cl.duocuc.induztek.ui.components.AparicionEscalonada
 import cl.duocuc.induztek.ui.components.CampoSeleccion
-import cl.duocuc.induztek.ui.components.CampoTexto
+import cl.duocuc.induztek.ui.components.BarraBusqueda
+import cl.duocuc.induztek.ui.components.Cargando
+import cl.duocuc.induztek.ui.components.ControlPaginacion
+import cl.duocuc.induztek.ui.components.FiltrosChips
 import cl.duocuc.induztek.ui.components.ChipEstado
 import cl.duocuc.induztek.ui.components.ChipResultado
 import cl.duocuc.induztek.ui.components.EstadoVacio
@@ -56,18 +60,19 @@ fun ProtocolosScreen(
     val hoy = remember { Formato.hoy() }
     val estados = EstadoProtocolo.entries
 
-    PantallaBase(titulo = "Protocolos", subtitulo = "${ui.protocolos.size} protocolo(s)", barraInferior = barraInferior) { padding ->
+    PantallaBase(titulo = "Protocolos", subtitulo = "${ui.pagina.totalElementos} protocolo(s)", barraInferior = barraInferior) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(Dimens.espacioPantalla),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                CampoTexto(
-                    ui.busqueda, viewModel::onBuscar, "Buscar por Nº de protocolo, TAG u OT", R.drawable.ic_buscar,
+                BarraBusqueda(
+                    ui.busqueda, viewModel::onBuscar, "Buscar por Nº de protocolo, TAG u OT",
                     capitalizacion = KeyboardCapitalization.Characters
                 )
             }
+            item { FiltrosChips(Resultado.entries, ui.resultado, { it.etiqueta }, { viewModel.onResultado(it) }) }
             if (!esCliente) {
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -108,6 +113,7 @@ fun ProtocolosScreen(
                     }
                 }
             }
+            if (ui.cargando && ui.protocolos.isEmpty()) item { Cargando(Modifier.height(120.dp)) }
             if (!ui.cargando && ui.protocolos.isEmpty()) {
                 item { EstadoVacio(R.drawable.ic_documento, "Sin protocolos", "No hay protocolos con esos filtros.") }
             }
@@ -130,6 +136,7 @@ fun ProtocolosScreen(
                     )
                 }
             }
+            item { ControlPaginacion(ui.pagina, viewModel::irAPagina) }
             item { Spacer(Modifier.height(Dimens.espacioGrande)) }
         }
     }

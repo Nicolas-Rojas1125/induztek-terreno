@@ -14,6 +14,7 @@ data class Cliente(
     val contactoNombre: String,
     val telefono: String,
     val correo: String,
+    val direccion: String = "",
     val cantidadInstalaciones: Int = 0
 )
 
@@ -49,6 +50,7 @@ data class Equipo(
     val corrienteNominalA: Double? = null,
     val maxContactosUohm: Double? = null,
     val observaciones: String = "",
+    val datosTecnicos: Map<String, String> = emptyMap(),
     val fotoPlaca: String? = null,
     val nombreInstalacion: String = "",
     val idCliente: Long = 0,
@@ -66,7 +68,9 @@ data class Usuario(
     val activo: Boolean = true,
     val idCliente: Long? = null,
     val cargo: String = "",
-    val nombreCliente: String = ""
+    val nombreCliente: String = "",
+    val creadoEn: Long? = null,
+    val actualizadoEn: Long? = null
 )
 
 data class Calibracion(
@@ -85,13 +89,15 @@ data class Instrumento(
     val modelo: String,
     val numeroSerie: String,
     val ultimaCalibracion: LocalDate? = null,
-    val vencimiento: LocalDate? = null
+    val vencimiento: LocalDate? = null,
+    val calibraciones: List<Calibracion> = emptyList()
 ) {
     val descripcion: String get() = "$nombre · $marca $modelo · Nº $numeroSerie"
 }
 
 data class Visita(
     val id: Long = 0,
+    val uuid: String = "",
     val numeroOt: String,
     val idInstalacion: Long,
     val fecha: LocalDate,
@@ -220,4 +226,47 @@ data class Indicadores(
     val promedioDiasFormalizacion: Double? = null,
     val equiposCliente: Int = 0,
     val actasCliente: Int = 0
+)
+
+data class Pagina<T>(
+    val items: List<T>,
+    val pagina: Int,
+    val totalPaginas: Int,
+    val totalElementos: Long
+) {
+    val hayAnterior: Boolean get() = pagina > 0
+    val haySiguiente: Boolean get() = pagina + 1 < totalPaginas
+    val textoPosicion: String
+        get() = if (totalElementos == 0L) "Sin resultados" else "Página ${pagina + 1} de $totalPaginas · $totalElementos resultado(s)"
+
+    companion object {
+        fun <T> vacia(): Pagina<T> = Pagina(emptyList(), 0, 1, 0)
+    }
+}
+
+data class Clima(
+    val temperaturaC: Double,
+    val humedadPct: Double,
+    val vientoKmh: Double?,
+    val codigoTiempo: Int?,
+    val descripcion: String,
+    val horaMedicion: String
+)
+
+data class CodigoRecuperacion(val mensaje: String, val codigoDemo: String?)
+
+data class ResumenSincronizacion(
+    val enviados: Int = 0,
+    val recibidos: Int = 0,
+    val errores: List<String> = emptyList(),
+    val fechaHora: Long = 0
+) {
+    val exitosa: Boolean get() = errores.isEmpty()
+}
+
+data class EstadoSincronizacion(
+    val pendientes: Int = 0,
+    val ultimaSincronizacion: Long? = null,
+    val sincronizando: Boolean = false,
+    val ultimoResultado: ResumenSincronizacion? = null
 )

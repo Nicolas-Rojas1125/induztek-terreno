@@ -1,6 +1,7 @@
 package cl.duocuc.induztek.data.repository
 
 import android.database.Cursor
+import cl.duocuc.induztek.data.local.EspejoLocal
 import cl.duocuc.induztek.data.local.InduztekDbHelper
 import cl.duocuc.induztek.data.local.consultar
 import cl.duocuc.induztek.data.local.consultarUno
@@ -9,17 +10,22 @@ import cl.duocuc.induztek.data.local.decimalONulo
 import cl.duocuc.induztek.data.local.entero
 import cl.duocuc.induztek.data.local.largo
 import cl.duocuc.induztek.data.local.texto
-import cl.duocuc.induztek.data.local.valores
 import cl.duocuc.induztek.domain.model.Cliente
 import cl.duocuc.induztek.domain.model.Comuna
 import cl.duocuc.induztek.domain.model.Instalacion
 import cl.duocuc.induztek.domain.model.Operacion
+import cl.duocuc.induztek.domain.model.Pagina
 import cl.duocuc.induztek.domain.model.Region
 import cl.duocuc.induztek.domain.model.Sesion
+import cl.duocuc.induztek.domain.util.Paginador
 import cl.duocuc.induztek.domain.validacion.ValidadorRut
+import cl.duocuc.induztek.data.remote.ActivosRemoto
 
-class ClienteRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) :
-    RepositorioBase(helper, cambios) {
+class ClienteRepositorio(
+    helper: InduztekDbHelper,
+    cambios: NotificadorCambios,
+    private val remoto: ActivosRemoto
+) : RepositorioBase(helper, cambios) {
     suspend fun regiones(): List<Region> = leer {
         consultar("SELECT id_region, nombre FROM region ORDER BY id_region DESC") {
             Region(it.largo("id_region"), it.texto("nombre"))
@@ -42,6 +48,7 @@ class ClienteRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) 
         contactoNombre = c.texto("contacto_nombre"),
         telefono = c.texto("telefono"),
         correo = c.texto("correo"),
+        direccion = c.texto("direccion"),
         cantidadInstalaciones = c.entero("n_instalaciones")
     )
 
@@ -70,20 +77,34 @@ class ClienteRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) 
         contar("SELECT COUNT(*) FROM cliente WHERE rut = ?", listOf(ValidadorRut.formatear(rut))) > 0
     }
 
-    suspend fun crearCliente(c: Cliente): Operacion<Long> =
-        escribir("Ya existe un cliente con ese RUT") {
-            val id = insertOrThrow(
-                "cliente", null, valores(
-                    "rut" to ValidadorRut.formatear(c.rut),
-                    "razon_social" to c.razonSocial.trim(),
-                    "giro" to c.giro.trim(),
-                    "contacto_nombre" to c.contactoNombre.trim(),
-                    "telefono" to c.telefono.trim(),
-                    "correo" to c.correo.trim().lowercase()
-                )
-            )
-            Operacion.Exito(id)
+    suspend fun paginaClientes(sesion: Sesion, texto: String, pagina: Int): Pagina<Cliente> =
+        Paginador.paginar(listarClientes(sesion, texto), pagina)
+
+    suspend fun comuna(idComuna: Long): Comuna? = leer {
+        consultarUno(
+            "SELECT c.id_comuna, c.nombre, c.id_region, r.nombre AS region FROM comuna c " +
+                "JOIN region r ON r.id_region = c.id_region WHERE c.id_comuna = ?",
+            listOf(idComuna)
+        ) { Comuna(it.largo("id_comuna"), it.texto("nombre"), it.largo("id_region"), it.texto("region")) }
+    }
+
+    suspend fun guardarCliente(actor: Long, c: Cliente): Operacion<Long> =
+        when (val r = remoto.guardarCliente(actor, c)) {
+            is Operacion.Fallo -> r
+            is Operacion.Exito -> escribir { EspejoLocal.cliente(this, r.valor); Operacion.Exito(r.valor.id) }
         }
+
+    suspend fun eliminarCliente(id: Long): Operacion<Unit> {
+        val instalaciones = leer { contar("SELECT COUNT(*) FROM instalacion WHERE id_cliente = ?", listOf(id)) }
+        if (instalaciones > 0) return Operacion.Fallo("No se puede eliminar: el cliente tiene $instalaciones instalación(es)")
+        return when (val r = remoto.eliminarCliente(id)) {
+            is Operacion.Fallo -> r
+            is Operacion.Exito -> escribir("El cliente tiene registros asociados") {
+                delete("cliente", "id_cliente = ?", arrayOf(id.toString()))
+                Operacion.Exito(Unit)
+            }
+        }
+    }
 
     private val sqlInstalacion = """
         SELECT i.*, c.razon_social, co.nombre AS comuna, r.nombre AS region,
@@ -123,19 +144,27 @@ class ClienteRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) 
         ) { leerInstalacion(it) }
     }
 
-    suspend fun crearInstalacion(i: Instalacion): Operacion<Long> =
-        escribir("Ese cliente ya tiene una instalación con ese nombre") {
-            val id = insertOrThrow(
-                "instalacion", null, valores(
-                    "id_cliente" to i.idCliente,
-                    "nombre" to i.nombre.trim(),
-                    "ubicacion" to i.ubicacion.trim(),
-                    "id_comuna" to i.idComuna,
-                    "observaciones_acceso" to i.observacionesAcceso.trim(),
-                    "latitud" to i.latitud,
-                    "longitud" to i.longitud
-                )
-            )
-            Operacion.Exito(id)
+    suspend fun guardarInstalacion(actor: Long, i: Instalacion): Operacion<Long> {
+        val comuna = comuna(i.idComuna) ?: return Operacion.Fallo("Seleccione una comuna válida")
+        val completa = i.copy(nombreComuna = comuna.nombre, nombreRegion = comuna.nombreRegion)
+        return when (val r = remoto.guardarInstalacion(actor, completa)) {
+            is Operacion.Fallo -> r
+            is Operacion.Exito -> escribir { EspejoLocal.instalacion(this, r.valor); Operacion.Exito(r.valor.id) }
         }
+    }
+
+    suspend fun eliminarInstalacion(id: Long): Operacion<Unit> {
+        val usos = leer {
+            contar("SELECT COUNT(*) FROM equipo WHERE id_instalacion = ?", listOf(id)) +
+                contar("SELECT COUNT(*) FROM visita WHERE id_instalacion = ?", listOf(id))
+        }
+        if (usos > 0) return Operacion.Fallo("No se puede eliminar: la instalación tiene equipos o visitas")
+        return when (val r = remoto.eliminarInstalacion(id)) {
+            is Operacion.Fallo -> r
+            is Operacion.Exito -> escribir("La instalación tiene registros asociados") {
+                delete("instalacion", "id_instalacion = ?", arrayOf(id.toString()))
+                Operacion.Exito(Unit)
+            }
+        }
+    }
 }

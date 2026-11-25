@@ -26,9 +26,11 @@ import cl.duocuc.induztek.ui.components.LocalConectado
 import cl.duocuc.induztek.ui.screens.admin.InstrumentoDetalleScreen
 import cl.duocuc.induztek.ui.screens.admin.InstrumentoFormScreen
 import cl.duocuc.induztek.ui.screens.admin.InstrumentosScreen
+import cl.duocuc.induztek.ui.screens.admin.UsuarioDetalleScreen
 import cl.duocuc.induztek.ui.screens.admin.UsuarioFormScreen
 import cl.duocuc.induztek.ui.screens.admin.UsuariosScreen
 import cl.duocuc.induztek.ui.screens.auth.LoginScreen
+import cl.duocuc.induztek.ui.screens.auth.RecuperarClaveScreen
 import cl.duocuc.induztek.ui.screens.clientes.ClienteDetalleScreen
 import cl.duocuc.induztek.ui.screens.clientes.ClienteFormScreen
 import cl.duocuc.induztek.ui.screens.clientes.ClientesScreen
@@ -38,7 +40,11 @@ import cl.duocuc.induztek.ui.screens.equipos.EquipoDetalleScreen
 import cl.duocuc.induztek.ui.screens.equipos.EquipoFormScreen
 import cl.duocuc.induztek.ui.screens.equipos.EquiposScreen
 import cl.duocuc.induztek.ui.screens.inicio.InicioScreen
+import cl.duocuc.induztek.ui.screens.perfil.CambiarClaveScreen
+import cl.duocuc.induztek.ui.screens.perfil.EditarPerfilScreen
 import cl.duocuc.induztek.ui.screens.perfil.MasScreen
+import cl.duocuc.induztek.ui.screens.perfil.ServidorScreen
+import cl.duocuc.induztek.ui.screens.perfil.SincronizacionScreen
 import cl.duocuc.induztek.ui.screens.protocolos.ProtocoloScreen
 import cl.duocuc.induztek.ui.screens.protocolos.ProtocolosScreen
 import cl.duocuc.induztek.ui.screens.protocolos.PruebaFormScreen
@@ -81,6 +87,8 @@ private fun NavHostController.reemplazar(ruta: String) {
     }
 }
 
+private val rutasPublicas = setOf(Ruta.Login.ruta, Ruta.RecuperarClave.ruta, Ruta.Servidor.ruta)
+
 private val argId = listOf(navArgument("id") { type = NavType.LongType })
 
 @Composable
@@ -102,9 +110,12 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
     val inicio = remember { if (sesion != null) Ruta.Inicio.ruta else Ruta.Login.ruta }
     val entrada by nav.currentBackStackEntryAsState()
     val rutaActual = entrada?.destination?.route
+    val sincronizacion by appViewModel.sincronizacion.collectAsStateWithLifecycle()
+    val servidor by appViewModel.servidor.collectAsStateWithLifecycle()
+    val conectado by appViewModel.conectado.collectAsStateWithLifecycle()
 
     LaunchedEffect(sesion) {
-        if (sesion == null && rutaActual != null && rutaActual != Ruta.Login.ruta) {
+        if (sesion == null && rutaActual != null && rutaActual !in rutasPublicas) {
             nav.navigate(Ruta.Login.ruta) { popUpTo(0) { inclusive = true } }
         }
     }
@@ -127,9 +138,29 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
         popExitTransition = { fadeOut(tween(160)) + slideOutOfContainer(SlideDirection.End, tween(260)) { it / 6 } }
     ) {
         composable(Ruta.Login.ruta) {
-            LoginScreen(onIngreso = {
-                nav.navigate(Ruta.Inicio.ruta) { popUpTo(Ruta.Login.ruta) { inclusive = true } }
-            })
+            LoginScreen(
+                onIngreso = { nav.navigate(Ruta.Inicio.ruta) { popUpTo(Ruta.Login.ruta) { inclusive = true } } },
+                onRecuperar = { nav.navigate(Ruta.RecuperarClave.ruta) },
+                onServidor = { nav.navigate(Ruta.Servidor.ruta) }
+            )
+        }
+        composable(Ruta.RecuperarClave.ruta) {
+            RecuperarClaveScreen(onVolver = volver)
+        }
+        composable(Ruta.Servidor.ruta) {
+            ServidorScreen(urlActual = servidor, onGuardar = { appViewModel.cambiarServidor(it); volver() }, onVolver = volver)
+        }
+        composable(Ruta.Perfil.ruta) {
+            EditarPerfilScreen(onVolver = volver)
+        }
+        composable(Ruta.CambiarClave.ruta) {
+            CambiarClaveScreen(onVolver = volver)
+        }
+        composable(Ruta.Sincronizacion.ruta) {
+            SincronizacionScreen(
+                estado = sincronizacion, conectado = conectado, servidor = servidor,
+                onSincronizar = appViewModel::sincronizar, onVolver = volver
+            )
         }
 
         composable(Ruta.Inicio.ruta) {
@@ -141,7 +172,9 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
                 onProtocolos = { nav.irAPrincipal(Ruta.Protocolos.ruta) },
                 onInstrumentos = { nav.navigate(Ruta.Instrumentos.ruta) },
                 onVisitas = { nav.irAPrincipal(if (sesion?.esCliente == true) Ruta.Actas.ruta else Ruta.Visitas.ruta) },
-                onEquipos = { nav.irAPrincipal(Ruta.Equipos.ruta) }
+                onEquipos = { nav.irAPrincipal(Ruta.Equipos.ruta) },
+                sincronizacion = sincronizacion,
+                onSincronizacion = { nav.navigate(Ruta.Sincronizacion.ruta) }
             )
         }
         composable(Ruta.Visitas.ruta) {
@@ -168,10 +201,15 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
             MasScreen(
                 sesion = sesion,
                 tema = tema,
+                sincronizacion = sincronizacion,
                 barraInferior = barra,
                 onClientes = { nav.navigate(Ruta.Clientes.ruta) },
                 onInstrumentos = { nav.navigate(Ruta.Instrumentos.ruta) },
                 onUsuarios = { nav.navigate(Ruta.Usuarios.ruta) },
+                onPerfil = { nav.navigate(Ruta.Perfil.ruta) },
+                onCambiarClave = { nav.navigate(Ruta.CambiarClave.ruta) },
+                onSincronizacion = { nav.navigate(Ruta.Sincronizacion.ruta) },
+                onServidor = { nav.navigate(Ruta.Servidor.ruta) },
                 onTema = appViewModel::cambiarTema,
                 onCerrarSesion = appViewModel::cerrarSesion
             )
@@ -191,8 +229,12 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
             ClienteDetalleScreen(
                 onVolver = volver,
                 onInstalacion = { nav.navigate(Ruta.InstalacionDetalle.crear(it)) },
-                onNuevaInstalacion = { nav.navigate(Ruta.InstalacionNueva.crear(it)) }
+                onNuevaInstalacion = { nav.navigate(Ruta.InstalacionNueva.crear(it)) },
+                onEditar = { nav.navigate(Ruta.ClienteEditar.crear(it)) }
             )
+        }
+        composable(Ruta.ClienteEditar.ruta, arguments = argId) {
+            ClienteFormScreen(onVolver = volver, onGuardado = { volver() })
         }
         composable(
             Ruta.InstalacionNueva.ruta,
@@ -205,8 +247,12 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
                 onVolver = volver,
                 onEquipo = { nav.navigate(Ruta.EquipoDetalle.crear(it)) },
                 onNuevoEquipo = { nav.navigate(Ruta.EquipoNuevo.crear(it)) },
-                onVisita = { nav.navigate(Ruta.VisitaDetalle.crear(it)) }
+                onVisita = { nav.navigate(Ruta.VisitaDetalle.crear(it)) },
+                onEditar = { nav.navigate(Ruta.InstalacionEditar.crear(it)) }
             )
+        }
+        composable(Ruta.InstalacionEditar.ruta, arguments = argId) {
+            InstalacionFormScreen(onVolver = volver, onGuardado = { volver() })
         }
 
         composable(
@@ -220,7 +266,14 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
             )
         }
         composable(Ruta.EquipoDetalle.ruta, arguments = argId) {
-            EquipoDetalleScreen(onVolver = volver, onProtocolo = { nav.navigate(Ruta.ProtocoloDetalle.crear(it)) })
+            EquipoDetalleScreen(
+                onVolver = volver,
+                onProtocolo = { nav.navigate(Ruta.ProtocoloDetalle.crear(it)) },
+                onEditar = { nav.navigate(Ruta.EquipoEditar.crear(it)) }
+            )
+        }
+        composable(Ruta.EquipoEditar.ruta, arguments = argId) {
+            EquipoFormScreen(onVolver = volver, onGuardado = { volver() }, onUsarExistente = { nav.reemplazar(Ruta.EquipoDetalle.crear(it)) })
         }
 
         composable(
@@ -275,12 +328,25 @@ private fun Grafo(sesion: Sesion?, tema: String, appViewModel: AppViewModel) {
             InstrumentoFormScreen(onVolver = volver, onGuardado = { nav.reemplazar(Ruta.InstrumentoDetalle.crear(it)) })
         }
         composable(Ruta.InstrumentoDetalle.ruta, arguments = argId) {
-            InstrumentoDetalleScreen(onVolver = volver)
+            InstrumentoDetalleScreen(onVolver = volver, onEditar = { nav.navigate(Ruta.InstrumentoEditar.crear(it)) })
+        }
+        composable(Ruta.InstrumentoEditar.ruta, arguments = argId) {
+            InstrumentoFormScreen(onVolver = volver, onGuardado = { volver() })
         }
         composable(Ruta.Usuarios.ruta) {
-            UsuariosScreen(onVolver = volver, onNuevo = { nav.navigate(Ruta.UsuarioNuevo.ruta) })
+            UsuariosScreen(
+                onVolver = volver,
+                onUsuario = { nav.navigate(Ruta.UsuarioDetalle.crear(it)) },
+                onNuevo = { nav.navigate(Ruta.UsuarioNuevo.ruta) }
+            )
         }
         composable(Ruta.UsuarioNuevo.ruta) {
+            UsuarioFormScreen(onVolver = volver, onGuardado = { nav.reemplazar(Ruta.UsuarioDetalle.crear(it)) })
+        }
+        composable(Ruta.UsuarioDetalle.ruta, arguments = argId) {
+            UsuarioDetalleScreen(onVolver = volver, onEditar = { nav.navigate(Ruta.UsuarioEditar.crear(it)) })
+        }
+        composable(Ruta.UsuarioEditar.ruta, arguments = argId) {
             UsuarioFormScreen(onVolver = volver, onGuardado = { volver() })
         }
     }

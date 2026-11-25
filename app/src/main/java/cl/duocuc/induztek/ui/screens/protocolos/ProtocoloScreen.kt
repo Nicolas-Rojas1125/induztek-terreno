@@ -67,6 +67,7 @@ import cl.duocuc.induztek.ui.components.FilaDato
 import cl.duocuc.induztek.ui.components.MostrarMensaje
 import cl.duocuc.induztek.ui.components.PantallaBase
 import cl.duocuc.induztek.ui.components.TarjetaErrores
+import cl.duocuc.induztek.ui.components.TarjetaClima
 import cl.duocuc.induztek.ui.components.TarjetaSeccion
 import cl.duocuc.induztek.ui.components.coloresEstado
 import cl.duocuc.induztek.ui.components.rememberPulso
@@ -76,7 +77,6 @@ import cl.duocuc.induztek.ui.theme.AmbarObservado
 import cl.duocuc.induztek.ui.theme.Dimens
 import cl.duocuc.induztek.ui.theme.MoradoFormalizado
 import cl.duocuc.induztek.ui.theme.RojoRechazado
-import cl.duocuc.induztek.ui.theme.RojoRechazadoFondo
 import cl.duocuc.induztek.viewmodel.ProtocoloUiState
 import cl.duocuc.induztek.viewmodel.ProtocoloViewModel
 
@@ -237,6 +237,15 @@ fun ProtocoloScreen(
                 }
             }
 
+            if (editable) {
+                item {
+                    TarjetaClima(
+                        ui.latitud, ui.longitud,
+                        onUsarValores = { t, h -> viewModel.aplicarClima(t, h) }
+                    )
+                }
+            }
+
             items(p.tipoEquipo.pruebas, key = { it.name }) { tipo ->
                 val lista = ui.pruebas.filter { it.tipo == tipo }
                 val comparacionesTipo = ui.comparaciones.filter { it.prueba.tipo == tipo }
@@ -281,7 +290,7 @@ fun ProtocoloScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth().scale(pulso),
                         shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = RojoRechazadoFondo)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -142,4 +142,30 @@ object Validadores {
         valor.trim().length < minimo -> "Describa el motivo (mínimo $minimo caracteres)"
         else -> null
     }
+
+    fun codigoRecuperacion(valor: String): String? = when {
+        valor.isBlank() -> "Ingrese el código de 6 dígitos"
+        !Regex("^\\d{6}$").matches(valor.trim()) -> "El código tiene 6 dígitos"
+        else -> null
+    }
+
+    fun confirmacion(contrasena: String, repetida: String): String? = when {
+        repetida.isBlank() -> "Repita la contraseña"
+        repetida != contrasena -> "Las contraseñas no coinciden"
+        else -> null
+    }
+
+    fun nuevaContrasena(actual: String, nueva: String): String? =
+        contrasena(nueva) ?: if (actual.isNotEmpty() && actual == nueva) "Debe ser distinta de la actual" else null
+
+    fun urlServidor(valor: String): String? {
+        val v = valor.trim()
+        return when {
+            v.isBlank() -> "Ingrese la dirección del servidor"
+            !Regex("^https?://[A-Za-z0-9.\\-]+(:\\d{1,5})?(/.*)?$").matches(v) -> "Use el formato http://10.0.2.2:8081/"
+            else -> null
+        }
+    }
+
+    fun direccion(valor: String): String? = textoOpcional(valor, "La dirección", 200)
 }

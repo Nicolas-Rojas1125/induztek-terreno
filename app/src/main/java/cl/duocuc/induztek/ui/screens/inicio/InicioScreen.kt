@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.duocuc.induztek.R
+import cl.duocuc.induztek.domain.model.EstadoSincronizacion
 import cl.duocuc.induztek.domain.model.Permiso
 import cl.duocuc.induztek.domain.model.RolCodigo
 import cl.duocuc.induztek.domain.reglas.Plazos
@@ -41,6 +42,7 @@ import cl.duocuc.induztek.ui.components.EstadoVacio
 import cl.duocuc.induztek.ui.components.PantallaBase
 import cl.duocuc.induztek.ui.components.TarjetaIndicador
 import cl.duocuc.induztek.ui.components.TarjetaLista
+import cl.duocuc.induztek.ui.theme.VerdeAprobado
 import cl.duocuc.induztek.ui.theme.AmbarObservado
 import cl.duocuc.induztek.ui.theme.Dimens
 import cl.duocuc.induztek.ui.theme.MoradoFormalizado
@@ -57,6 +59,8 @@ fun InicioScreen(
     onInstrumentos: () -> Unit,
     onVisitas: () -> Unit,
     onEquipos: () -> Unit,
+    sincronizacion: EstadoSincronizacion,
+    onSincronizacion: () -> Unit,
     viewModel: InicioViewModel = viewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -79,6 +83,8 @@ fun InicioScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item { Saludo(nombre = s.nombre.substringBefore(" "), detalle = if (s.esCliente) s.cargo.orEmpty() else s.rol.etiqueta, iniciales = s.iniciales) }
+
+            item { EstadoSync(sincronizacion, onSincronizacion) }
 
             item {
                 val ind = ui.indicadores
@@ -239,4 +245,27 @@ private fun Saludo(nombre: String, detalle: String, iniciales: String) {
             }
         }
     }
+}
+
+@Composable
+private fun EstadoSync(estado: EstadoSincronizacion, onClick: () -> Unit) {
+    val conErrores = estado.ultimoResultado?.errores?.isNotEmpty() == true
+    val color = when {
+        estado.sincronizando -> MaterialTheme.colorScheme.primary
+        conErrores || estado.pendientes > 0 -> AmbarObservado
+        else -> VerdeAprobado
+    }
+    val texto = when {
+        estado.sincronizando -> "Sincronizando con el servidor…"
+        estado.pendientes > 0 -> "${estado.pendientes} cambio(s) por enviar"
+        conErrores -> "Última sincronización con errores"
+        else -> "Datos al día con el servidor"
+    }
+    TarjetaLista(
+        titulo = texto,
+        subtitulo = "Última sincronización: ${Formato.hace(estado.ultimaSincronizacion)}",
+        icono = if (estado.pendientes > 0 || conErrores) R.drawable.ic_nube else R.drawable.ic_sincronizar,
+        colorIcono = color,
+        onClick = onClick
+    )
 }

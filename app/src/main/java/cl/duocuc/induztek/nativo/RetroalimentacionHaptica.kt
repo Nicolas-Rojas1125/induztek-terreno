@@ -5,10 +5,11 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import cl.duocuc.induztek.data.repository.Vibrador
 
 enum class TipoVibracion { EXITO, ADVERTENCIA, ERROR }
 
-class RetroalimentacionHaptica(context: Context) {
+class RetroalimentacionHaptica(context: Context) : Vibrador {
     private val vibrador: Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -18,7 +19,7 @@ class RetroalimentacionHaptica(context: Context) {
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
 
-    fun vibrar(tipo: TipoVibracion) {
+    override fun vibrar(tipo: TipoVibracion) {
         val v = vibrador ?: return
         if (!v.hasVibrator()) return
         val efecto = when (tipo) {

@@ -7,6 +7,7 @@ import cl.duocuc.induztek.domain.model.Equipo
 import cl.duocuc.induztek.domain.model.EstadoProtocolo
 import cl.duocuc.induztek.domain.model.Instalacion
 import cl.duocuc.induztek.domain.model.Operacion
+import cl.duocuc.induztek.domain.model.Pagina
 import cl.duocuc.induztek.domain.model.Permiso
 import cl.duocuc.induztek.domain.model.ProtocoloResumen
 import cl.duocuc.induztek.domain.model.RecepcionActa
@@ -17,6 +18,7 @@ import cl.duocuc.induztek.domain.model.TipoVisita
 import cl.duocuc.induztek.domain.model.Usuario
 import cl.duocuc.induztek.domain.model.Visita
 import cl.duocuc.induztek.domain.util.Formato
+import cl.duocuc.induztek.domain.util.Paginador
 import cl.duocuc.induztek.domain.validacion.Validadores
 import cl.duocuc.induztek.nativo.TipoVibracion
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,11 +31,15 @@ enum class FiltroVisitas(val etiqueta: String) { ABIERTAS("Abiertas"), MIAS("Don
 
 data class VisitasUiState(
     val cargando: Boolean = true,
-    val visitas: List<Visita> = emptyList(),
+    val pagina: Pagina<Visita> = Pagina.vacia(),
+    val busqueda: String = "",
+    val tipo: TipoVisita? = null,
     val filtro: FiltroVisitas = FiltroVisitas.ABIERTAS,
     val esCliente: Boolean = false,
     val puedeCrear: Boolean = false
-)
+) {
+    val visitas: List<Visita> get() = pagina.items
+}
 
 class VisitasViewModel(application: Application) : BaseViewModel(application) {
     private val _ui = MutableStateFlow(VisitasUiState())
@@ -41,15 +47,19 @@ class VisitasViewModel(application: Application) : BaseViewModel(application) {
 
     init { observarCambios { cargar() } }
 
-    private suspend fun cargar() {
+    private suspend fun cargar(pagina: Int = _ui.value.pagina.pagina) {
         val s = sesion ?: return
-        val f = _ui.value.filtro
-        val lista = if (s.esCliente) c.visitas.listar(s) else c.visitas.listar(
+        val u = _ui.value
+        val f = u.filtro
+        val lista = (if (s.esCliente) c.visitas.listar(s) else c.visitas.listar(
             s, soloAbiertas = f == FiltroVisitas.ABIERTAS, soloMias = f == FiltroVisitas.MIAS
-        )
+        )).filter { v ->
+            Paginador.coincide(u.busqueda, v.numeroOt, v.nombreInstalacion, v.nombreCliente, v.nombreIngeniero) &&
+                (u.tipo == null || v.tipo == u.tipo)
+        }
         _ui.update {
             it.copy(
-                cargando = false, visitas = lista, esCliente = s.esCliente,
+                cargando = false, pagina = Paginador.paginar(lista, pagina), esCliente = s.esCliente,
                 puedeCrear = s.puede(Permiso.REGISTRAR_PROTOCOLO)
             )
         }
@@ -57,8 +67,20 @@ class VisitasViewModel(application: Application) : BaseViewModel(application) {
 
     fun onFiltro(f: FiltroVisitas) {
         _ui.update { it.copy(filtro = f) }
-        lanzar { cargar() }
+        lanzar { cargar(0) }
     }
+
+    fun onBuscar(texto: String) {
+        _ui.update { it.copy(busqueda = texto) }
+        lanzar { cargar(0) }
+    }
+
+    fun onTipo(t: TipoVisita?) {
+        _ui.update { it.copy(tipo = if (it.tipo == t) null else t) }
+        lanzar { cargar(0) }
+    }
+
+    fun irAPagina(pagina: Int) = lanzar { cargar(pagina) }
 }
 
 data class VisitaFormUiState(
@@ -234,6 +256,7 @@ class VisitaDetalleViewModel(application: Application, estado: SavedStateHandle)
                     vibrar(TipoVibracion.EXITO)
                     _ui.update { it.copy(cerrando = false) }
                     mostrar("Visita cerrada: el Acta de prueba en terreno está lista")
+                    c.solicitarSincronizacion()
                 }
                 is Operacion.Fallo -> {
                     vibrar(TipoVibracion.ERROR)
@@ -296,7 +319,11 @@ class RecepcionViewModel(application: Application, estado: SavedStateHandle) : B
                 RecepcionActa(idVisita, v.nombre.valor, v.rut.valor, v.cargo.valor, ahora)
             )
             when (r) {
-                is Operacion.Exito -> { vibrar(TipoVibracion.EXITO); _ui.update { it.copy(guardando = false, guardado = true, fechaHora = ahora) } }
+                is Operacion.Exito -> {
+                    vibrar(TipoVibracion.EXITO)
+                    _ui.update { it.copy(guardando = false, guardado = true, fechaHora = ahora) }
+                    c.solicitarSincronizacion()
+                }
                 is Operacion.Fallo -> { vibrar(TipoVibracion.ERROR); _ui.update { it.copy(guardando = false) }; mostrar(r.mensaje) }
             }
         }

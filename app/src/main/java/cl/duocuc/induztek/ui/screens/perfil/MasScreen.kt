@@ -35,7 +35,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import cl.duocuc.induztek.R
 import cl.duocuc.induztek.domain.model.Permiso
+import cl.duocuc.induztek.domain.model.EstadoSincronizacion
 import cl.duocuc.induztek.domain.model.Sesion
+import cl.duocuc.induztek.domain.util.Formato
+import cl.duocuc.induztek.ui.components.TituloSeccion
 import cl.duocuc.induztek.ui.components.BotonSecundario
 import cl.duocuc.induztek.ui.components.PantallaBase
 import cl.duocuc.induztek.ui.components.TarjetaLista
@@ -48,10 +51,15 @@ import cl.duocuc.induztek.ui.theme.RojoRechazado
 fun MasScreen(
     sesion: Sesion?,
     tema: String,
+    sincronizacion: EstadoSincronizacion,
     barraInferior: @Composable () -> Unit,
     onClientes: () -> Unit,
     onInstrumentos: () -> Unit,
     onUsuarios: () -> Unit,
+    onPerfil: () -> Unit,
+    onCambiarClave: () -> Unit,
+    onSincronizacion: () -> Unit,
+    onServidor: () -> Unit,
     onTema: (String) -> Unit,
     onCerrarSesion: () -> Unit
 ) {
@@ -61,7 +69,12 @@ fun MasScreen(
             onDismissRequest = { confirmar = false },
             icon = { Icon(painterResource(R.drawable.ic_salir), contentDescription = null) },
             title = { Text("¿Cerrar sesión?") },
-            text = { Text("Los datos registrados quedan guardados en el teléfono.") },
+            text = {
+                Text(
+                    if (sincronizacion.pendientes > 0) "Hay ${sincronizacion.pendientes} cambio(s) sin enviar al servidor. Quedan guardados en el teléfono y se enviarán al volver a iniciar sesión."
+                    else "Los datos registrados quedan guardados en el teléfono."
+                )
+            },
             confirmButton = { TextButton(onClick = { confirmar = false; onCerrarSesion() }) { Text("Cerrar sesión", color = RojoRechazado) } },
             dismissButton = { TextButton(onClick = { confirmar = false }) { Text("Cancelar") } }
         )
@@ -89,11 +102,30 @@ fun MasScreen(
                         }
                     }
                 }
+                item { TituloSeccion("Mi cuenta") }
+                item { TarjetaLista("Mi perfil", "Nombre, correo, teléfono y cargo", onPerfil, icono = R.drawable.ic_persona) }
+                item { TarjetaLista("Cambiar contraseña", "Requiere su contraseña actual", onCambiarClave, icono = R.drawable.ic_llave) }
+                item {
+                    TarjetaLista(
+                        "Sincronización",
+                        if (sincronizacion.sincronizando) "Sincronizando…" else "Última: ${Formato.hace(sincronizacion.ultimaSincronizacion)}",
+                        onSincronizacion,
+                        icono = R.drawable.ic_sincronizar,
+                        detalle = if (sincronizacion.pendientes > 0) "${sincronizacion.pendientes} cambio(s) por enviar" else "Sin cambios pendientes"
+                    )
+                }
                 if (!sesion.esCliente) {
+                    item { TituloSeccion("Administración") }
                     item { TarjetaLista("Clientes e instalaciones", "Registro de clientes, plantas y equipos (RF-01, RF-02)", onClientes, icono = R.drawable.ic_empresa) }
                     item { TarjetaLista("Instrumentos", "Calibraciones y vencimientos (RN-11, RF-19)", onInstrumentos, icono = R.drawable.ic_herramienta) }
-                    if (sesion.puede(Permiso.GESTIONAR_PERSONAL) || sesion.puede(Permiso.OTORGAR_CUENTAS_CLIENTE)) {
-                        item { TarjetaLista("Personal y cuentas de cliente", "Agregar o desactivar usuarios (RF-22, RN-20)", onUsuarios, icono = R.drawable.ic_grupo) }
+                    if (sesion.puede(Permiso.CREAR_CUENTAS)) {
+                        item {
+                            TarjetaLista(
+                                "Cuentas de usuario",
+                                "Puede crear: " + sesion.rol.rolesQuePuedeCrear.joinToString { it.etiqueta.substringBefore(" (") },
+                                onUsuarios, icono = R.drawable.ic_grupo
+                            )
+                        }
                     }
                 }
                 item {
@@ -120,6 +152,7 @@ fun MasScreen(
                     }
                 }
             }
+            item { TarjetaLista("Servidor", "Dirección del API Gateway", onServidor, icono = R.drawable.ic_servidor) }
             item {
                 TarjetaSeccion("Recursos del dispositivo", icono = R.drawable.ic_info) {
                     Text("• Cámara: foto de la placa de características (PB-03)", style = MaterialTheme.typography.bodySmall)
@@ -127,6 +160,7 @@ fun MasScreen(
                     Text("• Vibración: confirmación táctil al trabajar con guantes", style = MaterialTheme.typography.bodySmall)
                     Text("• Estado de red: aviso de trabajo sin conexión (RNF-02)", style = MaterialTheme.typography.bodySmall)
                     Text("• PDF y compartir: acta en terreno (RF-07)", style = MaterialTheme.typography.bodySmall)
+                    Text("• API externa: clima actual de la instalación (Open-Meteo)", style = MaterialTheme.typography.bodySmall)
                 }
             }
             item {
@@ -134,7 +168,7 @@ fun MasScreen(
             }
             item {
                 Text(
-                    "Induztek Terreno · MVP académico DSY1105 · Datos ficticios",
+                    "Induztek Terreno 1.0 · DSY1105 · Grupo 17",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )

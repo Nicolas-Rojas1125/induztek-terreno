@@ -23,20 +23,22 @@ import cl.duocuc.induztek.domain.model.Usuario
 import cl.duocuc.induztek.domain.model.Visita
 import cl.duocuc.induztek.domain.validacion.ValidadorRut
 import java.time.LocalDate
+import java.util.UUID
 
 class VisitaRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) :
     RepositorioBase(helper, cambios) {
     private val sqlBase = """
-        SELECT v.*, i.nombre AS instalacion, i.id_cliente, c.razon_social, u.nombre AS ingeniero,
+        SELECT v.*, i.nombre AS instalacion, i.id_cliente, c.razon_social, COALESCE(u.nombre, 'Usuario ' || v.id_ingeniero_cargo) AS ingeniero,
                (SELECT COUNT(*) FROM protocolo p WHERE p.id_visita = v.id_visita AND p.estado <> 'ANULADO') AS n_protocolos
         FROM visita v
         JOIN instalacion i ON i.id_instalacion = v.id_instalacion
         JOIN cliente c ON c.id_cliente = i.id_cliente
-        JOIN usuario u ON u.id_usuario = v.id_ingeniero_cargo
+        LEFT JOIN usuario u ON u.id_usuario = v.id_ingeniero_cargo
         WHERE 1 = 1 """
 
     private fun leerVisita(c: Cursor) = Visita(
         id = c.largo("id_visita"),
+        uuid = c.texto("uuid"),
         numeroOt = c.texto("numero_ot"),
         idInstalacion = c.largo("id_instalacion"),
         fecha = LocalDate.parse(c.texto("fecha")),
@@ -93,6 +95,7 @@ class VisitaRepositorio(helper: InduztekDbHelper, cambios: NotificadorCambios) :
             enTransaccion {
                 val id = insertOrThrow(
                     "visita", null, valores(
+                        "uuid" to UUID.randomUUID().toString(),
                         "numero_ot" to v.numeroOt.trim().uppercase(),
                         "id_instalacion" to v.idInstalacion,
                         "fecha" to v.fecha.toString(),
